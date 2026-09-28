@@ -1,0 +1,2047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EmergencyTwin AI — Central Mall Digital Twin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+  :root{
+    --bg:#080B10;
+    --bg-2:#0C121A;
+    --panel:rgba(16,23,32,0.74);
+    --panel-border:rgba(255,255,255,0.08);
+    --text:#E7ECF2;
+    --text-muted:#8B98A8;
+    --text-faint:#5B6674;
+    --accent:#2FD9C4;
+    --accent-soft:rgba(47,217,196,0.14);
+    --accent-strong:#59F0DB;
+    --exit:#34D399;
+    --stair:#38BDF8;
+    --elevator:#8C8CF5;
+    --door:#F2B84B;
+    --furniture:#E38B6B;
+    --room-retail:#3B6EA5;
+    --room-office:#6C6BC7;
+    --room-utility:#8A7050;
+    --room-entrance:#1F9C87;
+    --divider:rgba(255,255,255,0.07);
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:var(--bg);
+    font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+  }
+  #canvas-wrap{ position:fixed; inset:0; }
+  canvas{ display:block; touch-action:none; }
+
+  .safe-top{ padding-top:env(safe-area-inset-top,0px); }
+  .safe-bottom{ padding-bottom:env(safe-area-inset-bottom,0px); }
+
+  /* ---------- Header ---------- */
+  header{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    padding-top:calc(env(safe-area-inset-top,0px) + 14px);
+    padding-bottom:14px;
+    padding-left:20px; padding-right:20px;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    background:linear-gradient(180deg, rgba(8,11,16,0.92) 0%, rgba(8,11,16,0.75) 70%, rgba(8,11,16,0) 100%);
+    flex-wrap:wrap;
+  }
+  .brand{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .brand-mark{
+    width:9px; height:9px; border-radius:2px; background:var(--accent);
+    box-shadow:0 0 12px var(--accent); display:inline-block; margin-right:2px;
+  }
+  .brand h1{
+    font-size:16.5px; font-weight:700; letter-spacing:0.01em; margin:0; color:var(--text);
+  }
+  .brand .sub{ font-size:12.5px; color:var(--text-muted); font-weight:500; }
+  .phase-badge{
+    font-size:11px; color:var(--accent); background:var(--accent-soft);
+    border:1px solid rgba(47,217,196,0.3); padding:3px 9px; border-radius:20px;
+    font-weight:600; white-space:nowrap;
+  }
+
+  .toolbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .seg{
+    display:flex; background:var(--panel); border:1px solid var(--panel-border);
+    border-radius:10px; padding:3px; backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    gap:2px;
+  }
+  .seg button{
+    appearance:none; border:none; background:transparent; color:var(--text-muted);
+    font-family:inherit; font-size:12.5px; font-weight:600; padding:7px 12px;
+    border-radius:7px; cursor:pointer; transition:background .15s, color .15s;
+    white-space:nowrap;
+  }
+  .seg button:hover{ color:var(--text); }
+  .seg button.active{ background:var(--accent); color:#06201C; }
+  .icon-btn{
+    width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+    background:var(--panel); border:1px solid var(--panel-border); border-radius:10px;
+    color:var(--text-muted); cursor:pointer; backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    transition:color .15s, border-color .15s;
+  }
+  .icon-btn:hover{ color:var(--text); border-color:rgba(255,255,255,0.18); }
+  .icon-btn svg{ width:16px; height:16px; }
+
+  /* ---------- Floating panels ---------- */
+  .panel{
+    position:fixed; z-index:20;
+    background:var(--panel); border:1px solid var(--panel-border);
+    border-radius:14px; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    box-shadow:0 12px 32px rgba(0,0,0,0.35);
+  }
+  .panel-head{
+    padding:13px 16px 11px; border-bottom:1px solid var(--divider);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .panel-head h2{ font-size:12.5px; font-weight:700; margin:0; color:var(--text); }
+  .panel-body{ padding:13px 16px 15px; }
+
+  #overview-panel{
+    top:calc(env(safe-area-inset-top,0px) + 84px); left:20px; width:238px;
+  }
+  .stat-row{ display:flex; justify-content:space-between; align-items:baseline; padding:5px 0; }
+  .stat-row .k{ font-size:12px; color:var(--text-muted); }
+  .stat-row .v{ font-size:13.5px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
+  .divider-line{ height:1px; background:var(--divider); margin:9px 0; }
+
+  .layer-row{
+    display:flex; align-items:center; gap:9px; padding:5px 0; cursor:pointer; user-select:none;
+  }
+  .swatch{ width:10px; height:10px; border-radius:3px; flex:none; }
+  .layer-row span{ font-size:12.5px; color:var(--text); flex:1; }
+  .toggle{
+    width:30px; height:17px; border-radius:20px; background:rgba(255,255,255,0.12);
+    position:relative; flex:none; transition:background .15s;
+  }
+  .toggle.on{ background:var(--accent); }
+  .toggle::after{
+    content:''; position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%;
+    background:#fff; transition:left .15s;
+  }
+  .toggle.on::after{ left:15px; }
+
+  #info-panel{
+    top:calc(env(safe-area-inset-top,0px) + 84px); right:20px; width:280px;
+    opacity:0; transform:translateX(14px); pointer-events:none;
+    transition:opacity .18s ease, transform .18s ease;
+  }
+  #info-panel.show{ opacity:1; transform:translateX(0); pointer-events:auto; }
+  .info-type{
+    display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:700;
+    color:var(--accent); background:var(--accent-soft); border-radius:6px; padding:3px 8px; margin-bottom:9px;
+  }
+  .info-dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
+  #info-panel .obj-title{ font-size:16px; font-weight:700; margin:0 0 3px; line-height:1.3; }
+  #info-panel .obj-sub{ font-size:12px; color:var(--text-muted); margin:0 0 12px; }
+  .kv{ display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--divider); }
+  .kv:first-of-type{ border-top:none; }
+  .kv .k{ font-size:12px; color:var(--text-muted); }
+  .kv .v{ font-size:12.5px; color:var(--text); font-weight:600; text-align:right; }
+  .status-pill{
+    display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px;
+  }
+  .close-x{
+    width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+    color:var(--text-muted); cursor:pointer; background:transparent; border:none;
+  }
+  .close-x:hover{ color:var(--text); background:rgba(255,255,255,0.06); }
+
+  #hint{
+    position:fixed; z-index:20;
+    top:calc(env(safe-area-inset-top,0px) + 84px); right:20px; width:280px;
+    padding:15px 16px; border-radius:14px;
+    background:var(--panel); border:1px solid var(--panel-border);
+    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    font-size:12.5px; color:var(--text-muted); line-height:1.55;
+    transition:opacity .18s ease;
+  }
+  #hint b{ color:var(--text); }
+  #hint.hide{ opacity:0; pointer-events:none; }
+
+  footer{
+    position:fixed; bottom:0; left:0; right:0; z-index:20;
+    padding-bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
+    padding-top:14px; padding-left:20px; padding-right:20px;
+    display:flex; justify-content:center;
+    background:linear-gradient(0deg, rgba(8,11,16,0.9) 0%, rgba(8,11,16,0) 100%);
+    pointer-events:none;
+  }
+  footer .note{
+    pointer-events:auto;
+    font-size:11.5px; color:var(--text-faint); text-align:center; max-width:520px;
+  }
+  footer .note b{ color:var(--text-muted); }
+
+  #labels{ position:fixed; inset:0; z-index:15; pointer-events:none; overflow:hidden; }
+  .obj-label{
+    position:absolute; top:0; left:0; white-space:nowrap;
+    display:flex; align-items:center; gap:5px;
+    background:rgba(8,12,18,0.82); border:1px solid rgba(255,255,255,0.1);
+    border-radius:7px; padding:3px 8px 3px 6px; font-size:10.5px; font-weight:600;
+    color:var(--text); backdrop-filter:blur(3px);
+    box-shadow:0 2px 8px rgba(0,0,0,0.3);
+  }
+  .obj-label .d{ width:7px; height:7px; border-radius:50%; flex:none; }
+  .obj-label.minor{ font-size:9.5px; font-weight:500; color:var(--text-muted); background:rgba(8,12,18,0.68); padding:2px 7px 2px 5px; }
+  #floor-hint{
+    position:fixed; z-index:20; left:50%; transform:translateX(-50%);
+    top:calc(env(safe-area-inset-top,0px) + 84px);
+    background:var(--panel); border:1px solid var(--panel-border); backdrop-filter:blur(14px);
+    padding:7px 14px; border-radius:20px; font-size:11.5px; color:var(--text-muted);
+    opacity:0; transition:opacity .2s ease; pointer-events:none;
+  }
+  #floor-hint.show{ opacity:1; }
+
+  #emergency-panel{
+    right:20px; bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
+    width:300px; max-height:66vh; overflow:auto; display:none;
+  }
+  .em-section-label{ font-size:11px; color:var(--text-muted); margin:12px 0 6px; font-weight:600; }
+  .em-section-label:first-child{ margin-top:0; }
+  .em-note{ font-size:11px; color:var(--text-faint); line-height:1.5; margin:2px 0 0; }
+  .chip-group{ display:flex; flex-wrap:wrap; }
+  .chip{
+    display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:20px;
+    border:1px solid var(--panel-border); background:rgba(255,255,255,0.04); font-size:11.5px;
+    color:var(--text-muted); cursor:pointer; margin:3px 5px 3px 0; user-select:none; transition:all .12s;
+  }
+  .chip:hover{ border-color:rgba(255,255,255,0.22); color:var(--text); }
+  .chip.active{ border-color:#E23D3D; background:rgba(226,61,61,0.18); color:#FF9B9B; }
+  .danger-btn{
+    width:100%; margin-top:13px; padding:9px; border-radius:9px; border:none;
+    background:#E23D3D; color:#fff; font-weight:700; font-size:12.5px; cursor:pointer; font-family:inherit;
+  }
+  .danger-btn:hover{ background:#F4573D; }
+  .ghost-btn{
+    width:100%; margin-top:10px; padding:9px; border-radius:9px; border:1px solid var(--panel-border);
+    background:transparent; color:var(--text); font-weight:700; font-size:12.5px; cursor:pointer; font-family:inherit;
+  }
+  .ghost-btn:hover{ border-color:rgba(255,255,255,0.3); }
+  .incident-banner{
+    padding:11px 12px; border-radius:10px; background:rgba(226,61,61,0.14);
+    border:1px solid rgba(226,61,61,0.4); margin-bottom:4px;
+  }
+  .ib-title{ font-size:13px; font-weight:800; color:#FF6B6B; display:flex; align-items:center; gap:7px; }
+  .ib-dot{ width:7px; height:7px; border-radius:50%; background:#FF6B6B; box-shadow:0 0 8px #FF6B6B; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{ opacity:1; } 50%{ opacity:0.35; } }
+  .ib-sub{ font-size:11.5px; color:var(--text-muted); margin-top:3px; }
+  .phase-badge.live{
+    color:#FF6B6B; background:rgba(226,61,61,0.16); border-color:rgba(226,61,61,0.4);
+  }
+
+  #assistant-panel{
+    right:20px; bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
+    width:320px; max-height:64vh; display:none; flex-direction:column;
+  }
+  #assistant-panel .panel-body{ display:flex; flex-direction:column; overflow:hidden; }
+  #chat-log{
+    display:flex; flex-direction:column; gap:8px; overflow-y:auto; max-height:280px;
+    margin-bottom:11px; padding-right:2px;
+  }
+  .chat-msg{ font-size:12.5px; line-height:1.55; padding:8px 12px; border-radius:11px; max-width:92%; }
+  .chat-msg.user{ align-self:flex-end; background:var(--accent-soft); border:1px solid rgba(47,217,196,0.28); color:var(--text); }
+  .chat-msg.assistant{ align-self:flex-start; background:rgba(255,255,255,0.045); border:1px solid var(--panel-border); color:var(--text); white-space:pre-wrap; }
+  .chat-msg.thinking{ color:var(--text-muted); font-style:italic; }
+  #chat-input-row{ display:flex; gap:8px; }
+  #voice-controls{ display:flex; justify-content:center; padding:6px 0 2px; }
+  #mic-btn{
+    display:flex; align-items:center; gap:9px; padding:11px 20px; border-radius:30px;
+    border:1px solid var(--panel-border); background:rgba(255,255,255,0.05); color:var(--text);
+    font-family:inherit; font-size:12.5px; font-weight:700; cursor:pointer; transition:all .15s;
+  }
+  #mic-btn:hover{ border-color:rgba(255,255,255,0.25); }
+  #mic-btn.live{ background:rgba(226,61,61,0.16); border-color:rgba(226,61,61,0.4); color:#FF9B9B; }
+  #mic-dot{ width:9px; height:9px; border-radius:50%; background:var(--text-faint); flex:none; }
+  #mic-btn.live #mic-dot{ background:#FF6B6B; box-shadow:0 0 8px #FF6B6B; animation:pulse 1.2s ease-in-out infinite; }
+  #chat-input{
+    flex:1; background:rgba(255,255,255,0.05); border:1px solid var(--panel-border); border-radius:9px;
+    padding:9px 11px; color:var(--text); font-family:inherit; font-size:12.5px; outline:none;
+  }
+  #chat-input:focus{ border-color:var(--accent); }
+  #chat-input:disabled{ opacity:0.5; }
+  #chat-send{
+    padding:9px 15px; border-radius:9px; border:none; background:var(--accent); color:#06201C;
+    font-weight:700; font-size:12.5px; cursor:pointer; font-family:inherit;
+  }
+  #chat-send:hover:not(:disabled){ background:var(--accent-strong); }
+  #chat-send:disabled{ opacity:0.5; cursor:default; }
+
+  #route-panel{
+    left:20px; bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
+    width:300px; max-height:66vh; overflow:auto; display:none;
+  }
+  .field-label{ display:block; font-size:11px; color:var(--text-muted); margin:10px 0 5px; font-weight:600; }
+  .field-label:first-child{ margin-top:0; }
+  select{
+    width:100%; background:rgba(255,255,255,0.05); border:1px solid var(--panel-border); color:var(--text);
+    font-family:inherit; font-size:12.5px; padding:8px 10px; border-radius:8px; outline:none; appearance:none;
+  }
+  select:focus{ border-color:var(--accent); }
+  .calc-btn{
+    width:100%; margin-top:13px; padding:9px; border-radius:9px; border:none;
+    background:var(--accent); color:#06201C; font-weight:700; font-size:12.5px; cursor:pointer; font-family:inherit;
+  }
+  .calc-btn:hover{ background:var(--accent-strong); }
+  .route-item{
+    margin-top:9px; padding:10px 11px; border-radius:10px; border:1px solid var(--panel-border);
+    background:rgba(255,255,255,0.03); cursor:pointer; transition:border-color .15s, background .15s;
+  }
+  .route-item:hover{ border-color:rgba(255,255,255,0.2); }
+  .route-item.active{ border-color:var(--accent); background:var(--accent-soft); }
+  .route-item .rt-top{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px; }
+  .route-item .rt-name{ font-size:12.5px; font-weight:700; }
+  .route-item .rt-dist{ font-size:12px; color:var(--text-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  #route-whatif-banner{
+    margin-top:10px; padding:8px 10px; border-radius:9px; font-size:11.5px;
+    background:rgba(245,166,35,0.14); border:1px solid rgba(245,166,35,0.35); color:#FBBF66;
+  }
+  #route-guidance{ margin-top:4px; }
+  .guidance-title{ font-size:11px; color:var(--text-muted); font-weight:700; margin:14px 0 6px; }
+  .guidance-list{ margin:0; padding-left:18px; }
+  .guidance-list li{ font-size:12px; color:var(--text); line-height:1.7; }
+  .guidance-note{ font-size:10.5px; color:var(--text-faint); margin-top:7px; font-style:italic; }
+
+  #loading{
+    position:fixed; inset:0; z-index:100; background:var(--bg);
+    display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px;
+    transition:opacity .4s ease;
+  }
+  #loading .ring{
+    width:34px; height:34px; border-radius:50%; border:2.5px solid rgba(47,217,196,0.18);
+    border-top-color:var(--accent); animation:spin 0.9s linear infinite;
+  }
+  #loading p{ font-size:12.5px; color:var(--text-muted); letter-spacing:0.02em; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  @media (max-width:760px){
+    .brand .sub{ display:none; }
+    #overview-panel{ left:14px; right:14px; width:auto; top:auto; bottom:calc(env(safe-area-inset-bottom,0px) + 14px); max-height:38vh; overflow:auto; }
+    #overview-panel.collapsed .panel-body{ display:none; }
+    #info-panel{ left:14px; right:14px; width:auto; top:auto; bottom:calc(env(safe-area-inset-bottom,0px) + 14px); }
+    #route-panel{ left:14px; right:14px; width:auto; }
+    #emergency-panel{ left:14px; right:14px; width:auto; }
+    #assistant-panel{ left:14px; right:14px; width:auto; }
+    #hint{ left:14px; right:14px; width:auto; bottom:calc(env(safe-area-inset-bottom,0px) + 14px); top:auto; }
+    footer{ display:none; }
+    header{ padding-left:14px; padding-right:14px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="ring"></div>
+  <p>Generating digital twin…</p>
+</div>
+
+<div id="canvas-wrap"></div>
+<div id="labels"></div>
+<div id="floor-hint" class="show">Select a single floor to see room, door and object labels</div>
+
+<header class="safe-top">
+  <div class="brand">
+    <h1><span class="brand-mark"></span>EmergencyTwin AI</h1>
+    <span class="sub">Central Mall — Interactive Digital Twin</span>
+  </div>
+  <div class="toolbar">
+    <div class="seg" id="floor-seg"></div>
+    <div class="seg">
+      <button id="btn-reset" title="Reset view">Reset</button>
+      <button id="btn-top" title="Top view">Top</button>
+      <button id="btn-iso" title="3D view">3D</button>
+    </div>
+    <div class="seg"><button id="btn-routes">Routes</button></div>
+    <div class="seg"><button id="btn-emergency">Emergency</button></div>
+    <div class="seg"><button id="btn-assistant">Voice</button></div>
+    <span class="phase-badge" id="phase-badge">Hackathon build · Voice coming next</span>
+  </div>
+</header>
+
+<div class="panel" id="overview-panel">
+  <div class="panel-head">
+    <h2>Building overview</h2>
+  </div>
+  <div class="panel-body">
+    <div class="stat-row"><span class="k">Building</span><span class="v">Central Mall</span></div>
+    <div class="stat-row"><span class="k">Floors</span><span class="v" id="stat-floors">–</span></div>
+    <div class="stat-row"><span class="k">Rooms</span><span class="v" id="stat-rooms">–</span></div>
+    <div class="stat-row"><span class="k">Emergency exits</span><span class="v" id="stat-exits">–</span></div>
+    <div class="stat-row"><span class="k">Semantic objects</span><span class="v" id="stat-objects">–</span></div>
+    <div class="divider-line"></div>
+    <div class="layer-row" data-layer="rooms"><span class="swatch" style="background:linear-gradient(135deg,var(--room-retail),var(--room-office))"></span><span>Rooms (retail / office / storage)</span><div class="toggle on"></div></div>
+    <div class="layer-row" data-layer="corridors"><span class="swatch" style="background:#8B99A8"></span><span>Corridors</span><div class="toggle on"></div></div>
+    <div class="layer-row" data-layer="walls"><span class="swatch" style="background:#E7ECF2"></span><span>Walls</span><div class="toggle on"></div></div>
+    <div class="layer-row" data-layer="doors"><span class="swatch" style="background:var(--door)"></span><span>Doors</span><div class="toggle on"></div></div>
+    <div class="layer-row" data-layer="vertical"><span class="swatch" style="background:var(--stair)"></span><span>Stairs &amp; elevator</span><div class="toggle on"></div></div>
+    <div class="layer-row" data-layer="exits"><span class="swatch" style="background:var(--exit)"></span><span>Emergency exits</span><div class="toggle on"></div></div>
+    <div class="layer-row" data-layer="furniture"><span class="swatch" style="background:var(--furniture)"></span><span>Furniture</span><div class="toggle on"></div></div>
+  </div>
+</div>
+
+<div id="hint">
+  Rotate with drag, zoom with scroll. Switch floors above, or click <b>any room, door, stair, exit or object</b> in the scene to inspect its data.
+</div>
+
+<div class="panel" id="info-panel">
+  <div class="panel-head">
+    <h2>Object details</h2>
+    <button class="close-x" id="info-close">✕</button>
+  </div>
+  <div class="panel-body" id="info-body"></div>
+</div>
+
+<div class="panel" id="route-panel">
+  <div class="panel-head">
+    <h2>Route planner</h2>
+    <button class="close-x" id="route-close">✕</button>
+  </div>
+  <div class="panel-body">
+    <span class="field-label">Start</span>
+    <select id="route-start"></select>
+    <span class="field-label">Destination</span>
+    <select id="route-dest">
+      <option value="nearest">Nearest available exit</option>
+    </select>
+    <span class="field-label">What-if (optional)</span>
+    <select id="route-whatif">
+      <option value="none">No hypothetical change</option>
+    </select>
+    <button class="calc-btn" id="route-calc">Calculate route</button>
+    <div id="route-whatif-banner" style="display:none;"></div>
+    <div id="route-results"></div>
+    <div id="route-guidance"></div>
+    <button class="ghost-btn" id="report-export-btn">Export incident report (JSON)</button>
+  </div>
+</div>
+
+<div class="panel" id="emergency-panel">
+  <div class="panel-head">
+    <h2>Emergency engine</h2>
+    <button class="close-x" id="emergency-close">✕</button>
+  </div>
+  <div class="panel-body" id="emergency-body"></div>
+</div>
+
+<div class="panel" id="assistant-panel">
+  <div class="panel-head">
+    <h2>Voice assistant</h2>
+    <button class="close-x" id="assistant-close">✕</button>
+  </div>
+  <div class="panel-body" id="assistant-scroll">
+    <div class="seg" id="voice-mode-seg" style="margin-bottom:11px;">
+      <button id="mode-security" class="active">Security</button>
+      <button id="mode-occupant">Occupant</button>
+    </div>
+    <div id="chat-log"></div>
+    <div id="voice-controls">
+      <button id="mic-btn" title="Start voice session">
+        <span id="mic-dot"></span>
+        <span id="mic-label">Start voice session</span>
+      </button>
+    </div>
+    <p class="em-note" id="assistant-hint">Needs to be deployed (e.g. on Vercel) with ASSEMBLYAI_API_KEY set — this preview can't reach AssemblyAI's servers.</p>
+  </div>
+</div>
+
+<footer>
+  <div class="note"><b>Simulation / Decision Support Prototype.</b> Digital twin, routing, emergency engine, what-if simulation, occupant guidance &amp; report export are live. Voice assistant is being wired up next.</div>
+</footer>
+
+<script>
+(function(){
+
+/* ============================================================
+   1. SEMANTIC BUILDING DATA
+   ============================================================ */
+const FLOOR_H = 5.2;      // vertical distance between floor slabs
+const WALL_H  = 3.15;     // room wall height
+const SLAB_T  = 0.18;
+
+function makeFloor(id, name, roomDefs, extra){
+  return Object.assign({ id, name, elevation:(id-1)*FLOOR_H, rooms: roomDefs }, extra||{});
+}
+
+// Room defs: x,z = center; w,d = size along X / Z; doorSide = which edge opens to the corridor
+const FLOOR1_ROOMS = [
+  { id:'entrance',  label:'Main Entrance & Atrium', subtype:'entrance', x:-16,  z:0,    w:8,  d:16, doorSide:'east'  },
+  { id:'store1',    label:'Store — Apparel',        subtype:'retail',   x:-9,   z:6.5,  w:7,  d:8,  doorSide:'south' },
+  { id:'store2',    label:'Store — Electronics',    subtype:'retail',   x:-1,   z:6.5,  w:6,  d:8,  doorSide:'south' },
+  { id:'store3',    label:'Store — Books & Stationery', subtype:'retail', x:6,  z:6.5,  w:6,  d:8,  doorSide:'south' },
+  { id:'store4',    label:'Store — Sporting Goods',  subtype:'retail',  x:11.5, z:6.5,  w:5,  d:8,  doorSide:'south' },
+  { id:'foodcourt', label:'Food Court',              subtype:'retail',  x:-7,   z:-6.5, w:11, d:8,  doorSide:'north' },
+  { id:'store5',    label:'Store — Pharmacy',        subtype:'retail',  x:1,    z:-6.5, w:6,  d:8,  doorSide:'north' },
+  { id:'store6',    label:'Store — Home & Living',   subtype:'retail',  x:8,    z:-6.5, w:8,  d:8,  doorSide:'north' },
+  { id:'store7',    label:'Store — Mobile Accessories', subtype:'retail', x:13,  z:-6.5, w:4,  d:8,  doorSide:'north' },
+];
+const FLOOR2_ROOMS = [
+  { id:'lobby2',    label:'Level 2 Lobby',           subtype:'lobby',   x:-16,  z:0,    w:8,  d:16, doorSide:'east'  },
+  { id:'office201', label:'Office 201',              subtype:'office',  x:-9,   z:6.5,  w:7,  d:8,  doorSide:'south' },
+  { id:'office202', label:'Office 202',              subtype:'office',  x:-1,   z:6.5,  w:6,  d:8,  doorSide:'south' },
+  { id:'office203', label:'Office 203',              subtype:'office',  x:6,    z:6.5,  w:6,  d:8,  doorSide:'south' },
+  { id:'office204', label:'Office 204',              subtype:'office',  x:11.5, z:6.5,  w:5,  d:8,  doorSide:'south' },
+  { id:'openoffice',label:'Open Office — Design Team',subtype:'office', x:-7,   z:-6.5, w:11, d:8,  doorSide:'north' },
+  { id:'meeting205',label:'Meeting Room 205',         subtype:'office', x:1,    z:-6.5, w:6,  d:8,  doorSide:'north' },
+  { id:'meeting206',label:'Meeting Room 206',         subtype:'office', x:8,    z:-6.5, w:8,  d:8,  doorSide:'north' },
+  { id:'storage207',label:'Storage 207',              subtype:'utility',x:13,   z:-6.5, w:4,  d:8,  doorSide:'north' },
+];
+const FLOOR3_ROOMS = [
+  { id:'lobby3',    label:'Level 3 Lobby',           subtype:'lobby',   x:-16,  z:0,    w:8,  d:16, doorSide:'east'  },
+  { id:'office301', label:'Office 301',              subtype:'office',  x:-9,   z:6.5,  w:7,  d:8,  doorSide:'south' },
+  { id:'room305',   label:'Room 305 — Office',        subtype:'office', x:-1,   z:6.5,  w:6,  d:8,  doorSide:'south' },
+  { id:'office303', label:'Office 303',              subtype:'office',  x:6,    z:6.5,  w:6,  d:8,  doorSide:'south' },
+  { id:'office304', label:'Office 304',              subtype:'office',  x:11.5, z:6.5,  w:5,  d:8,  doorSide:'south' },
+  { id:'archiveA',  label:'Storage — Archive A',      subtype:'utility', x:-7,  z:-6.5, w:11, d:8,  doorSide:'north' },
+  { id:'archiveB',  label:'Storage — Archive B',      subtype:'utility', x:1,   z:-6.5, w:6,  d:8,  doorSide:'north' },
+  { id:'itstore',   label:'Storage — IT Equipment',   subtype:'utility', x:8,   z:-6.5, w:8,  d:8,  doorSide:'north' },
+  { id:'janitorial',label:'Janitorial',               subtype:'utility',x:13,   z:-6.5, w:4,  d:8,  doorSide:'north' },
+];
+
+// Corridors — shared footprint shape across all floors
+const CORRIDOR_SHAPE = [
+  { id:'corridor_main',   label:'Central Corridor',       x:3,  z:0, w:30, d:5 },
+  { id:'corridor_branch', label:'North Corridor Branch',  x:17, z:7, w:4,  d:9 },
+];
+
+const FLOORS = [
+  makeFloor(1, 'Ground Floor', FLOOR1_ROOMS),
+  makeFloor(2, 'Level 2', FLOOR2_ROOMS),
+  makeFloor(3, 'Level 3', FLOOR3_ROOMS),
+];
+
+// Vertical circulation — spans the whole building height
+const VERTICAL = [
+  { id:'stairA',    label:'Stairwell A', type:'stair',    x:17.5, z:-6.5, size:3.2 },
+  { id:'stairB',    label:'Stairwell B', type:'stair',    x:-16,  z:-10,  size:3.6 },
+  { id:'elevatorA', label:'Elevator A',  type:'elevator', x:2.5,  z:0,    size:2.2 },
+];
+
+// Ground-floor emergency exits — the only exits leading outside the building
+const EXITS = [
+  { id:'exit_west',  label:'West Exit (Main)', x:-19.6, z:0 },
+  { id:'exit_north', label:'North Exit',       x:17,    z:12.2 },
+  { id:'exit_south', label:'South Exit',       x:-7,    z:-11.2 },
+  { id:'exit_east',  label:'East Exit',        x:19.3,  z:0 },
+];
+
+// A few furniture / obstacle markers for texture
+const FURNITURE = [
+  { id:'kiosk1',   label:'Information Kiosk', floor:1, x:-15.5, z:3.3,  w:1.4, d:1.4 },
+  { id:'table1',   label:'Food Court Table',  floor:1, x:-9.5,  z:-6,   w:1.1, d:1.1 },
+  { id:'table2',   label:'Food Court Table',  floor:1, x:-5.5,  z:-8,   w:1.1, d:1.1 },
+  { id:'reception2', label:'Reception Desk',  floor:2, x:-15.5, z:3.3,  w:2.0, d:0.9 },
+  { id:'server1',  label:'Server Rack',       floor:2, x:13,    z:-8,   w:1.0, d:1.0 },
+  { id:'reception3', label:'Reception Desk',  floor:3, x:-15.5, z:3.3,  w:2.0, d:0.9 },
+];
+
+/* ============================================================
+   2. THREE.JS SETUP
+   ============================================================ */
+const wrap = document.getElementById('canvas-wrap');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x080B10);
+scene.fog = new THREE.FogExp2(0x080B10, 0.0068);
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth/window.innerHeight, 0.1, 500);
+const DEFAULT_CAM = new THREE.Vector3(46, 42, 50);
+const TARGET_CENTER = new THREE.Vector3(1, 6, 0);
+camera.position.copy(DEFAULT_CAM);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+wrap.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.copy(TARGET_CENTER);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 12;
+controls.maxDistance = 130;
+controls.maxPolarAngle = Math.PI*0.495;
+
+// Lights
+scene.add(new THREE.AmbientLight(0x33465a, 1.1));
+const hemi = new THREE.HemisphereLight(0x5aa9c9, 0x0a0e14, 0.55);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xdfe9f5, 1.05);
+sun.position.set(40, 60, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left = -55; sun.shadow.camera.right = 55;
+sun.shadow.camera.top = 55; sun.shadow.camera.bottom = -55;
+sun.shadow.camera.far = 160;
+sun.shadow.bias = -0.0009;
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0x2fd9c4, 0.18);
+fill.position.set(-30,20,-30);
+scene.add(fill);
+
+// Base plate
+const baseGeo = new THREE.CircleGeometry(46, 48);
+const baseMat = new THREE.MeshStandardMaterial({ color:0x0A0F16, roughness:1, metalness:0 });
+const base = new THREE.Mesh(baseGeo, baseMat);
+base.rotation.x = -Math.PI/2;
+base.position.y = -0.3;
+base.receiveShadow = true;
+scene.add(base);
+
+// subtle grid
+const grid = new THREE.GridHelper(92, 46, 0x1a2733, 0x121a22);
+grid.position.y = -0.28;
+scene.add(grid);
+
+/* ============================================================
+   3. MATERIALS
+   ============================================================ */
+const MAT = {
+  roomRetail:   new THREE.MeshStandardMaterial({ color:0x3B6EA5, roughness:0.75, metalness:0.05, emissive:0x0b1d30, emissiveIntensity:0.4 }),
+  roomOffice:   new THREE.MeshStandardMaterial({ color:0x6C6BC7, roughness:0.75, metalness:0.05, emissive:0x1c1a3d, emissiveIntensity:0.4 }),
+  roomUtility:  new THREE.MeshStandardMaterial({ color:0x8A7050, roughness:0.8,  metalness:0.05, emissive:0x2a2013, emissiveIntensity:0.35 }),
+  entranceFloor:new THREE.MeshStandardMaterial({ color:0x1F9C87, roughness:0.7,  metalness:0.05, emissive:0x083c33, emissiveIntensity:0.45 }),
+  corridorFloor:new THREE.MeshStandardMaterial({ color:0x8B99A8, roughness:0.9  }),
+  wall:        new THREE.MeshStandardMaterial({ color:0xE7ECF2, roughness:0.9, transparent:true, opacity:0.22 }),
+  wallEdge:    new THREE.LineBasicMaterial({ color:0xFFFFFF, transparent:true, opacity:0.9 }),
+  roomOutline: new THREE.LineBasicMaterial({ color:0xFFFFFF, transparent:true, opacity:0.55 }),
+  door:        new THREE.MeshStandardMaterial({ color:0xF2B84B, roughness:0.4, metalness:0.15, emissive:0x5a3c0a, emissiveIntensity:0.75 }),
+  stair:       new THREE.MeshStandardMaterial({ color:0x38BDF8, roughness:0.5, metalness:0.15, emissive:0x0c3c4d, emissiveIntensity:0.5 }),
+  elevator:    new THREE.MeshStandardMaterial({ color:0x8C8CF5, roughness:0.4, metalness:0.2, emissive:0x24204d, emissiveIntensity:0.5 }),
+  elevatorShaft: new THREE.MeshBasicMaterial({ color:0x8C8CF5, transparent:true, opacity:0.06, wireframe:false }),
+  exit:        new THREE.MeshStandardMaterial({ color:0x34D399, roughness:0.35, metalness:0.1, emissive:0x0f5c3f, emissiveIntensity:0.8 }),
+  furniture:   new THREE.MeshStandardMaterial({ color:0xE38B6B, roughness:0.6, metalness:0.05, emissive:0x3a1d12, emissiveIntensity:0.4 }),
+};
+const SUBTYPE_MAT = { retail: MAT.roomRetail, office: MAT.roomOffice, utility: MAT.roomUtility, entrance: MAT.entranceFloor, lobby: MAT.entranceFloor };
+
+/* ============================================================
+   4. GENERATION HELPERS
+   ============================================================ */
+const layerGroups = { rooms:new THREE.Group(), corridors:new THREE.Group(), walls:new THREE.Group(),
+  doors:new THREE.Group(), vertical:new THREE.Group(), exits:new THREE.Group(), furniture:new THREE.Group() };
+Object.values(layerGroups).forEach(g=>scene.add(g));
+
+const floorGroups = {};      // floorId -> THREE.Group (rooms+corridors+doors+furniture for that floor)
+const registry = {};         // id -> semantic object (for info panel + stats)
+const interactive = [];      // meshes that can be clicked
+
+function registerMesh(mesh, semantic){
+  mesh.userData.semantic = semantic;
+  registry[semantic.id] = semantic;
+  interactive.push(mesh);
+}
+
+const roomMeshes = {}, corridorMeshes = {}, exitVisuals = {};
+
+const labelsEl = document.getElementById('labels');
+const labels = [];
+const LABEL_DOT = {
+  room:'linear-gradient(135deg,#3B6EA5,#6C6BC7)', corridor:'#8B99A8', door:'var(--door)',
+  furniture:'var(--furniture)', stair:'var(--stair)', elevator:'var(--elevator)', emergency_exit:'var(--exit)',
+};
+// type: room|corridor|door|furniture|stair|elevator|emergency_exit
+// floorId: 1|2|3|'all' ('all' = always relevant regardless of selected floor, used for stairs/elevator)
+// minor: true for small secondary labels (door/furniture) that only show once a single floor is isolated
+function addLabel(mesh, text, type, floorId, yOffset, minor){
+  const el = document.createElement('div');
+  el.className = 'obj-label' + (minor ? ' minor' : '');
+  el.innerHTML = `<span class="d" style="background:${LABEL_DOT[type]||'#8B98A8'}"></span>${text}`;
+  labelsEl.appendChild(el);
+  labels.push({ mesh, el, type, floorId, yOffset: yOffset||0.6, minor: !!minor });
+}
+function isEffectivelyVisible(obj){
+  let o = obj;
+  while(o){ if(o.visible===false) return false; o = o.parent; }
+  return true;
+}
+
+function addFloorSlab(floorGroup, y){
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(42, SLAB_T, 26), new THREE.MeshStandardMaterial({ color:0x0E1620, roughness:1 }));
+  slab.position.set(1, y - SLAB_T/2 - 0.02, 0);
+  slab.receiveShadow = true;
+  floorGroup.add(slab);
+}
+
+function buildRoom(room, floorDef){
+  const y = floorDef.elevation;
+  const mat = (SUBTYPE_MAT[room.subtype] || MAT.roomRetail).clone();
+  const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(room.w, SLAB_T*1.4, room.d), mat);
+  floorMesh.position.set(room.x, y + SLAB_T*0.7, room.z);
+  floorMesh.receiveShadow = true; floorMesh.castShadow = false;
+  floorMesh.userData.base = { color: mat.color.getHex(), emissive: mat.emissive.getHex(), emissiveIntensity: mat.emissiveIntensity };
+  layerGroups.rooms.add(floorMesh);
+  roomMeshes[room.id] = floorMesh;
+
+  const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(room.w+0.04, SLAB_T*1.4+0.04, room.d+0.04)), MAT.roomOutline);
+  outline.position.copy(floorMesh.position);
+  outline.userData.linkFloor = floorDef.id;
+  layerGroups.rooms.add(outline);
+
+  const semantic = {
+    id: room.id, type:'room', subtype:room.subtype, label:room.label, floor:floorDef.id,
+    floorName:floorDef.name, status:'available', width:room.w.toFixed(1), depth:room.d.toFixed(1),
+    connected: CORRIDOR_SHAPE[0].label,
+  };
+  registerMesh(floorMesh, semantic);
+  addLabel(floorMesh, room.label, 'room', floorDef.id, WALL_H+0.55);
+
+  // Walls on the 3 closed sides (everything but doorSide, which opens to the corridor)
+  const sides = ['north','south','east','west'].filter(s=>s!==room.doorSide);
+  sides.forEach(side=>{
+    let w,d,px,pz;
+    if(side==='north'||side==='south'){ w = room.w; d = 0.14; px = room.x; pz = room.z + (side==='north'? room.d/2 : -room.d/2); }
+    else { w = 0.14; d = room.d; pz = room.z; px = room.x + (side==='east'? room.w/2 : -room.w/2); }
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(w, WALL_H, d), MAT.wall);
+    wall.position.set(px, y + WALL_H/2, pz);
+    wall.castShadow = false; wall.receiveShadow = false;
+    layerGroups.walls.add(wall);
+  });
+
+  // Door marker on the open side
+  let dx=room.x, dz=room.z, rot=0;
+  if(room.doorSide==='north'){ dz = room.z + room.d/2; }
+  else if(room.doorSide==='south'){ dz = room.z - room.d/2; }
+  else if(room.doorSide==='east'){ dx = room.x + room.w/2; rot = Math.PI/2; }
+  else if(room.doorSide==='west'){ dx = room.x - room.w/2; rot = Math.PI/2; }
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.9, 2.3, 0.22), MAT.door);
+  door.position.set(dx, y + 2.3/2, dz);
+  door.rotation.y = rot;
+  door.castShadow = true;
+  layerGroups.doors.add(door);
+  const doorGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.3, 8), new THREE.MeshBasicMaterial({ color:0xF2B84B, transparent:true, opacity:0.5 }));
+  doorGlow.position.copy(door.position);
+  doorGlow.userData.linkFloor = floorDef.id;
+  layerGroups.doors.add(doorGlow);
+  registerMesh(door, {
+    id:'door_'+room.id, type:'door', label:'Door — '+room.label, floor:floorDef.id, floorName:floorDef.name,
+    status:'available', width:'1.9', connected: room.label,
+  });
+  addLabel(door, 'Door', 'door', floorDef.id, 1.0, true);
+
+  return floorMesh;
+}
+
+function buildCorridor(seg, floorDef){
+  const y = floorDef.elevation;
+  const mat = MAT.corridorFloor.clone();
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(seg.w, SLAB_T, seg.d), mat);
+  mesh.position.set(seg.x, y + SLAB_T/2, seg.z);
+  mesh.receiveShadow = true;
+  mesh.userData.base = { color: mat.color.getHex(), emissive: mat.emissive.getHex(), emissiveIntensity: mat.emissiveIntensity };
+  layerGroups.corridors.add(mesh);
+  const corridorKey = `${seg.id}_f${floorDef.id}`;
+  corridorMeshes[corridorKey] = mesh;
+  registerMesh(mesh, {
+    id: seg.id+'_f'+floorDef.id, type:'corridor', label:seg.label, floor:floorDef.id, floorName:floorDef.name,
+    status:'available', width:seg.w.toFixed(1), depth:seg.d.toFixed(1),
+  });
+  addLabel(mesh, seg.label, 'corridor', floorDef.id, 0.5, true);
+}
+
+function buildFurniture(item){
+  const floorDef = FLOORS[item.floor-1];
+  const w = item.w*1.15, d = item.d*1.15, h = 1.05;
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), MAT.furniture);
+  mesh.position.set(item.x, floorDef.elevation + h/2 + SLAB_T, item.z);
+  mesh.castShadow = true;
+  layerGroups.furniture.add(mesh);
+  registerMesh(mesh, {
+    id:item.id, type:'furniture', label:item.label, floor:item.floor, floorName:floorDef.name, status:'in place',
+  });
+  addLabel(mesh, item.label, 'furniture', item.floor, 0.85, true);
+}
+
+function buildVertical(v){
+  const topY = FLOORS[FLOORS.length-1].elevation + WALL_H + 0.4;
+  const isStair = v.type==='stair';
+  const group = new THREE.Group();
+
+  if(isStair){
+    // shaft outline
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(v.size, topY, v.size), new THREE.MeshBasicMaterial({ color:0x38BDF8, transparent:true, opacity:0.045 }));
+    shaft.position.set(v.x, topY/2, v.z);
+    group.add(shaft);
+    // stylised steps rising through each floor-to-floor gap
+    const steps = 9;
+    for(let f=0; f<FLOORS.length-1; f++){
+      const startY = FLOORS[f].elevation;
+      for(let i=0;i<steps;i++){
+        const t = i/(steps-1);
+        const stepY = startY + t*FLOOR_H + 0.15;
+        const stepZ = v.z - v.size/2 + t*v.size*0.85 + 0.2;
+        const step = new THREE.Mesh(new THREE.BoxGeometry(v.size*0.8, 0.16, v.size*0.16), MAT.stair);
+        step.position.set(v.x, stepY, stepZ);
+        step.castShadow = true;
+        group.add(step);
+      }
+    }
+  } else {
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(v.size, topY, v.size), MAT.elevatorShaft);
+    shaft.position.set(v.x, topY/2, v.z);
+    group.add(shaft);
+    FLOORS.forEach(fd=>{
+      const car = new THREE.Mesh(new THREE.BoxGeometry(v.size*0.72, 2.1, v.size*0.72), MAT.elevator);
+      car.position.set(v.x, fd.elevation + 1.1, v.z);
+      car.castShadow = true;
+      group.add(car);
+    });
+  }
+  layerGroups.vertical.add(group);
+
+  // one clickable hit-box spanning full height for the semantic object
+  const hit = new THREE.Mesh(new THREE.BoxGeometry(v.size+0.3, topY, v.size+0.3), new THREE.MeshBasicMaterial({ visible:false }));
+  hit.position.set(v.x, topY/2, v.z);
+  layerGroups.vertical.add(hit);
+  registerMesh(hit, {
+    id:v.id, type:v.type, label:v.label, floor:'All (1–3)', status:'available',
+    connected: isStair ? 'All corridors' : 'All corridors',
+  });
+  addLabel(hit, v.label, v.type, 'all', topY/2 + 1.4);
+}
+
+function buildExit(ex){
+  const floorDef = FLOORS[0];
+  const y = floorDef.elevation;
+  const postMat = MAT.exit.clone();
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, 2.6, 16), postMat);
+  post.position.set(ex.x, y + 1.3, ex.z);
+  post.castShadow = true;
+  layerGroups.exits.add(post);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.06, 12, 32), postMat);
+  ring.position.set(ex.x, y + 2.7, ex.z);
+  ring.rotation.x = Math.PI/2;
+  layerGroups.exits.add(ring);
+  post.userData.base = { color: postMat.color.getHex(), emissive: postMat.emissive.getHex(), emissiveIntensity: postMat.emissiveIntensity };
+  exitVisuals[ex.id] = { post, ring, mat: postMat };
+  registerMesh(post, {
+    id:ex.id, type:'emergency_exit', label:ex.label, floor:1, floorName:floorDef.name, status:'available',
+    width:'1.8m',
+  });
+  interactive.push(ring); ring.userData.semantic = post.userData.semantic;
+  addLabel(post, ex.label, 'emergency_exit', 'all', 3.6);
+}
+
+/* ---- build everything ---- */
+FLOORS.forEach(floorDef=>{
+  const g = new THREE.Group();
+  floorGroups[floorDef.id] = g;
+  addFloorSlab(g, floorDef.elevation);
+  floorDef.rooms.forEach(r=>buildRoom(r, floorDef));
+  CORRIDOR_SHAPE.forEach(seg=>buildCorridor(seg, floorDef));
+});
+VERTICAL.forEach(buildVertical);
+EXITS.forEach(buildExit);
+FURNITURE.forEach(buildFurniture);
+
+/* ============================================================
+   5b. NAVIGATION GRAPH + ROUTE ENGINE
+   ============================================================ */
+const MAIN_SPINE_X = [-12, -9, -7, -1, 1, 6, 8, 11.5, 13, 17];
+const BRANCH_Z = [2.5, 5, 7, 9, 11.5];
+const BRANCH_X = 17;
+
+function buildGraph(){
+  const nodes = {};
+  const edgesById = {};
+
+  function addNode(id, x, z, floor, kind){
+    nodes[id] = { id, x, z, floor, elevation: FLOORS[floor-1] ? FLOORS[floor-1].elevation : 0, kind };
+  }
+  function addEdge(a, b, weight){
+    if(!nodes[a] || !nodes[b]) return;
+    const key = [a,b].sort().join('|');
+    edgesById[key] = { a, b, weight, status:'available' };
+  }
+  function neighbors(id){
+    const out = [];
+    for(const key in edgesById){
+      const e = edgesById[key];
+      if(e.a===id) out.push({ to:e.b, edge:e });
+      else if(e.b===id) out.push({ to:e.a, edge:e });
+    }
+    return out;
+  }
+  function nearestCorridorNode(x, z, floor){
+    let best=null, bd=Infinity;
+    Object.values(nodes).forEach(n=>{
+      if(n.floor===floor && n.kind==='corridor'){
+        const d = Math.hypot(n.x-x, n.z-z);
+        if(d<bd){ bd=d; best=n; }
+      }
+    });
+    return { node:best, dist:bd };
+  }
+
+  FLOORS.forEach(fd=>{
+    const f = fd.id;
+    MAIN_SPINE_X.forEach(x=> addNode(`spine_${x}_f${f}`, x, 0, f, 'corridor'));
+    for(let i=0;i<MAIN_SPINE_X.length-1;i++){
+      addEdge(`spine_${MAIN_SPINE_X[i]}_f${f}`, `spine_${MAIN_SPINE_X[i+1]}_f${f}`, MAIN_SPINE_X[i+1]-MAIN_SPINE_X[i]);
+    }
+    BRANCH_Z.forEach(z=> addNode(`branch_${z}_f${f}`, BRANCH_X, z, f, 'corridor'));
+    for(let i=0;i<BRANCH_Z.length-1;i++){
+      addEdge(`branch_${BRANCH_Z[i]}_f${f}`, `branch_${BRANCH_Z[i+1]}_f${f}`, BRANCH_Z[i+1]-BRANCH_Z[i]);
+    }
+    addEdge(`spine_17_f${f}`, `branch_2.5_f${f}`, 0.1);
+
+    fd.rooms.forEach(r=>{
+      addNode(r.id, r.x, r.z, f, 'room');
+      if(r.subtype==='entrance' || r.subtype==='lobby'){
+        addEdge(r.id, `spine_-12_f${f}`, 4);
+      } else {
+        addEdge(r.id, `spine_${r.x}_f${f}`, Math.abs(r.z));
+      }
+    });
+  });
+
+  VERTICAL.forEach(v=>{
+    FLOORS.forEach(fd=>{
+      const id = `${v.id}_f${fd.id}`;
+      addNode(id, v.x, v.z, fd.id, v.type);
+      const near = nearestCorridorNode(v.x, v.z, fd.id);
+      if(near.node) addEdge(id, near.node.id, near.dist);
+    });
+    for(let i=0;i<FLOORS.length-1;i++){
+      const w = v.type==='stair' ? FLOOR_H*1.3 : FLOOR_H;
+      addEdge(`${v.id}_f${FLOORS[i].id}`, `${v.id}_f${FLOORS[i+1].id}`, w);
+    }
+  });
+
+  EXITS.forEach(ex=>{
+    addNode(ex.id, ex.x, ex.z, 1, 'exit');
+    const near = nearestCorridorNode(ex.x, ex.z, 1);
+    if(near.node) addEdge(ex.id, near.node.id, near.dist);
+  });
+
+  function dijkstra(startId, endId){
+    if(!nodes[startId] || !nodes[endId]) return null;
+    const dist = {}, prev = {};
+    Object.keys(nodes).forEach(id=> dist[id]=Infinity);
+    dist[startId] = 0;
+    const remaining = new Set(Object.keys(nodes));
+    while(remaining.size){
+      let u=null, best=Infinity;
+      remaining.forEach(id=>{ if(dist[id]<best){ best=dist[id]; u=id; } });
+      if(u===null) break;
+      remaining.delete(u);
+      if(u===endId) break;
+      neighbors(u).forEach(({to,edge})=>{
+        if(edge.status==='blocked') return;
+        const penalty = edge.status==='restricted' ? 2.5 : 1;
+        const alt = dist[u] + edge.weight*penalty;
+        if(alt < dist[to]){ dist[to]=alt; prev[to]=u; }
+      });
+    }
+    if(dist[endId]===undefined || dist[endId]===Infinity) return null;
+    const path=[endId]; let cur=endId;
+    while(cur!==startId){ if(!prev[cur]) return null; cur=prev[cur]; path.unshift(cur); }
+    let worst='available';
+    for(let i=0;i<path.length-1;i++){
+      const key=[path[i],path[i+1]].sort().join('|');
+      const e = edgesById[key];
+      if(e && e.status==='blocked') worst='blocked';
+      else if(e && e.status==='restricted' && worst!=='blocked') worst='restricted';
+    }
+    return { path, distance: dist[endId], status: worst };
+  }
+
+  return { nodes, edgesById, neighbors, dijkstra };
+}
+const GRAPH = buildGraph();
+
+/* ============================================================
+   5c. EMERGENCY ENGINE (Phase 3)
+   ============================================================ */
+const HAZARD_COLOR = { blocked:0xE23D3D, restricted:0xF5A623 };
+const HAZARD_EMISSIVE = { blocked:0x4a0d0d, restricted:0x4a2f08 };
+
+function setRoomHazard(id, status){
+  const mesh = roomMeshes[id]; if(!mesh) return;
+  if(status==='available'){
+    mesh.material.color.setHex(mesh.userData.base.color);
+    mesh.material.emissive.setHex(mesh.userData.base.emissive);
+    mesh.material.emissiveIntensity = mesh.userData.base.emissiveIntensity;
+  } else {
+    mesh.material.color.setHex(HAZARD_COLOR[status]);
+    mesh.material.emissive.setHex(HAZARD_EMISSIVE[status]);
+    mesh.material.emissiveIntensity = 0.9;
+  }
+}
+function setCorridorHazard(key, status){
+  const mesh = corridorMeshes[key]; if(!mesh) return;
+  if(status==='available'){
+    mesh.material.color.setHex(mesh.userData.base.color);
+    mesh.material.emissive.setHex(mesh.userData.base.emissive);
+    mesh.material.emissiveIntensity = mesh.userData.base.emissiveIntensity;
+  } else {
+    mesh.material.color.setHex(HAZARD_COLOR[status]);
+    mesh.material.emissive.setHex(HAZARD_EMISSIVE[status]);
+    mesh.material.emissiveIntensity = 0.85;
+  }
+}
+function setExitHazard(id, status){
+  const v = exitVisuals[id]; if(!v) return;
+  if(status==='available'){
+    v.mat.color.setHex(v.post.userData.base.color);
+    v.mat.emissive.setHex(v.post.userData.base.emissive);
+    v.mat.emissiveIntensity = v.post.userData.base.emissiveIntensity;
+  } else {
+    v.mat.color.setHex(status==='blocked' ? 0x6B7280 : HAZARD_COLOR.restricted);
+    v.mat.emissive.setHex(status==='blocked' ? 0x1a1c1f : HAZARD_EMISSIVE.restricted);
+    v.mat.emissiveIntensity = 0.55;
+  }
+}
+function tintElevatorBlocked(on){
+  MAT.elevator.color.setHex(on ? 0x5B5B6E : 0x8C8CF5);
+  MAT.elevator.emissive.setHex(on ? 0x141416 : 0x24204d);
+  MAT.elevator.emissiveIntensity = on ? 0.3 : 0.5;
+}
+function blockAllEdgesTouching(nodeId, status){
+  Object.values(GRAPH.edgesById).forEach(e=>{ if(e.a===nodeId || e.b===nodeId) e.status = status; });
+}
+function setCorridorGraphStatus(corridorKey, floor, status){
+  const prefix = corridorKey==='main' ? 'spine_' : 'branch_';
+  Object.values(GRAPH.edgesById).forEach(e=>{
+    const aMatch = e.a.startsWith(prefix) && e.a.endsWith(`_f${floor}`);
+    const bMatch = e.b.startsWith(prefix) && e.b.endsWith(`_f${floor}`);
+    if(aMatch || bMatch) e.status = status;
+  });
+}
+
+const EMERGENCY = { active:false, type:'Fire', floor:null, severity:'High', hazardRooms:new Set(), blockedExits:new Set(), blockedCorridors:new Set() };
+
+function resetEmergency(){
+  Object.values(GRAPH.edgesById).forEach(e=> e.status='available');
+  Object.keys(roomMeshes).forEach(id=> setRoomHazard(id,'available'));
+  Object.keys(corridorMeshes).forEach(key=> setCorridorHazard(key,'available'));
+  Object.keys(exitVisuals).forEach(id=> setExitHazard(id,'available'));
+  tintElevatorBlocked(false);
+  EMERGENCY.active = false;
+  EMERGENCY.hazardRooms = new Set(); EMERGENCY.blockedExits = new Set(); EMERGENCY.blockedCorridors = new Set();
+  clearRoute(); renderRouteResults([]);
+}
+
+function activateEmergency(draft){
+  resetEmergency();
+  EMERGENCY.active = true;
+  EMERGENCY.type = 'Fire';
+  EMERGENCY.floor = draft.floor;
+  EMERGENCY.severity = draft.severity;
+  EMERGENCY.hazardRooms = new Set(draft.hazardRooms);
+  EMERGENCY.blockedExits = new Set(draft.blockedExits);
+  EMERGENCY.blockedCorridors = new Set(draft.blockedCorridors);
+  EMERGENCY.timestamp = new Date();
+
+  EMERGENCY.hazardRooms.forEach(rid=>{ blockAllEdgesTouching(rid,'blocked'); setRoomHazard(rid,'blocked'); });
+  EMERGENCY.blockedExits.forEach(exId=>{ blockAllEdgesTouching(exId,'blocked'); setExitHazard(exId,'blocked'); });
+  EMERGENCY.blockedCorridors.forEach(key=>{
+    const [corridorKey, floorPart] = key.split('_f');
+    setCorridorGraphStatus(corridorKey, floorPart, 'blocked');
+    setCorridorHazard(`corridor_${corridorKey}_f${floorPart}`, 'blocked');
+  });
+  // Elevators are excluded from evacuation routing during any fire incident (safety rule)
+  Object.values(GRAPH.edgesById).forEach(e=>{
+    if(e.a.startsWith('elevatorA_f') || e.b.startsWith('elevatorA_f')) e.status = 'blocked';
+  });
+  tintElevatorBlocked(true);
+}
+
+/* ============================================================
+   5. STATS
+   ============================================================ */
+(function fillStats(){
+  const rooms = Object.values(registry).filter(o=>o.type==='room').length;
+  document.getElementById('stat-floors').textContent = FLOORS.length;
+  document.getElementById('stat-rooms').textContent = rooms;
+  document.getElementById('stat-exits').textContent = EXITS.length;
+  document.getElementById('stat-objects').textContent = Object.keys(registry).length;
+})();
+
+/* ============================================================
+   6. UI — floor selector, view buttons, layer toggles
+   ============================================================ */
+let currentFloor = 'all';
+
+function setFloorVisibility(){
+  FLOORS.forEach(fd=>{
+    // rooms/corridors/doors/furniture are separated by material groups, not per-floor groups,
+    // so we filter by the mesh's own userData.semantic.floor instead.
+  });
+  [layerGroups.rooms, layerGroups.corridors, layerGroups.doors, layerGroups.furniture].forEach(group=>{
+    group.children.forEach(mesh=>{
+      const floorId = mesh.userData.semantic ? mesh.userData.semantic.floor : mesh.userData.linkFloor;
+      if(floorId===undefined) return;
+      mesh.visible = (currentFloor==='all') ? true : (String(floorId)===String(currentFloor));
+    });
+  });
+  document.getElementById('floor-hint').classList.toggle('show', currentFloor==='all');
+  layerGroups.walls.children.forEach(wall=>{
+    // walls didn't get semantic tags; infer visibility from Y position
+    if(currentFloor==='all'){ wall.visible = true; return; }
+    const fd = FLOORS[currentFloor-1];
+    wall.visible = Math.abs(wall.position.y - (fd.elevation + WALL_H/2)) < 0.05;
+  });
+  layerGroups.exits.children.forEach(m=>{ m.visible = (currentFloor==='all' || String(currentFloor)==='1'); });
+}
+
+const floorSeg = document.getElementById('floor-seg');
+const floorOptions = [{k:'all', label:'All floors'}, {k:1, label:'Floor 1'}, {k:2, label:'Floor 2'}, {k:3, label:'Floor 3'}];
+floorOptions.forEach(opt=>{
+  const btn = document.createElement('button');
+  btn.textContent = opt.label;
+  if(opt.k==='all') btn.classList.add('active');
+  btn.addEventListener('click', ()=>{
+    currentFloor = opt.k;
+    [...floorSeg.children].forEach(c=>c.classList.remove('active'));
+    btn.classList.add('active');
+    setFloorVisibility();
+    focusFloor(opt.k);
+  });
+  floorSeg.appendChild(btn);
+});
+
+function focusFloor(k){
+  if(k==='all'){ flyTo(DEFAULT_CAM, TARGET_CENTER); return; }
+  const fd = FLOORS[k-1];
+  const t = new THREE.Vector3(1, fd.elevation+1.6, 0);
+  flyTo(new THREE.Vector3(38, fd.elevation+26, 40), t);
+}
+
+document.getElementById('btn-reset').addEventListener('click', ()=>flyTo(DEFAULT_CAM, TARGET_CENTER));
+document.getElementById('btn-top').addEventListener('click', ()=>flyTo(new THREE.Vector3(1, 92, 0.05), new THREE.Vector3(1,0,0)));
+document.getElementById('btn-iso').addEventListener('click', ()=>flyTo(DEFAULT_CAM, TARGET_CENTER));
+
+let flyAnim = null;
+function flyTo(pos, target){
+  const startPos = camera.position.clone();
+  const startTarget = controls.target.clone();
+  let t0 = null;
+  if(flyAnim) cancelAnimationFrame(flyAnim);
+  controls.enabled = false;
+  function step(ts){
+    if(t0===null) t0 = ts;
+    const p = Math.min((ts-t0)/650, 1);
+    const e = 1 - Math.pow(1-p, 3);
+    camera.position.lerpVectors(startPos, pos, e);
+    controls.target.lerpVectors(startTarget, target, e);
+    controls.update();
+    if(p<1){ flyAnim = requestAnimationFrame(step); } else { controls.enabled = true; }
+  }
+  flyAnim = requestAnimationFrame(step);
+}
+
+// layer toggles
+document.querySelectorAll('.layer-row').forEach(row=>{
+  row.addEventListener('click', ()=>{
+    const key = row.dataset.layer;
+    const toggle = row.querySelector('.toggle');
+    const on = !toggle.classList.contains('on');
+    toggle.classList.toggle('on', on);
+    layerGroups[key].visible = on;
+    if(key==='rooms'||key==='corridors'||key==='doors'||key==='furniture'||key==='walls'||key==='exits') setFloorVisibility();
+  });
+});
+
+/* ============================================================
+   7. SELECTION / INFO PANEL
+   ============================================================ */
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let selectedOutline = null;
+const infoPanel = document.getElementById('info-panel');
+const infoBody = document.getElementById('info-body');
+const hint = document.getElementById('hint');
+
+const TYPE_META = {
+  room:            { label:'Room',            color:'#8FB4CE' },
+  corridor:        { label:'Corridor',        color:'#AEB9C6' },
+  door:            { label:'Door',            color:'#C9D3DE' },
+  stair:           { label:'Stairwell',       color:'#38BDF8' },
+  elevator:        { label:'Elevator',        color:'#8C8CF5' },
+  emergency_exit:  { label:'Emergency Exit',  color:'#34D399' },
+  furniture:       { label:'Furniture / Object', color:'#94A3B8' },
+};
+
+function showInfo(semantic){
+  const meta = TYPE_META[semantic.type] || { label:semantic.type, color:'#8B98A8' };
+  hint.classList.add('hide');
+  let rows = '';
+  rows += kv('Floor', semantic.floorName ? (semantic.floorName+' ('+semantic.floor+')') : semantic.floor);
+  rows += kv('Status', '<span class="status-pill" style="background:rgba(52,211,153,0.16); color:#34D399;">'+ (semantic.status||'—') +'</span>', true);
+  if(semantic.width) rows += kv('Width', semantic.width + (String(semantic.width).includes('m')?'':'m'));
+  if(semantic.depth) rows += kv('Depth', semantic.depth+'m');
+  if(semantic.connected) rows += kv('Connected to', semantic.connected);
+  rows += kv('Object ID', '<code style="font-size:11px;">'+semantic.id+'</code>', true);
+
+  infoBody.innerHTML = `
+    <span class="info-type" style="color:${meta.color}; background:${meta.color}22;"><span class="info-dot"></span>${meta.label}</span>
+    <p class="obj-title">${semantic.label}</p>
+    <p class="obj-sub">${meta.label} in Central Mall</p>
+    ${rows}
+  `;
+  infoPanel.classList.add('show');
+}
+function kv(k,v,raw){ return `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`; }
+
+document.getElementById('info-close').addEventListener('click', ()=>{
+  infoPanel.classList.remove('show');
+  hint.classList.remove('hide');
+  clearOutline();
+});
+
+function clearOutline(){
+  if(selectedOutline){ scene.remove(selectedOutline); selectedOutline = null; }
+}
+
+let aiOutlines = [];
+function clearAiHighlights(){ aiOutlines.forEach(o=>scene.remove(o)); aiOutlines = []; }
+function highlightMultiple(meshes){
+  clearAiHighlights();
+  meshes.forEach(m=>{
+    const box = new THREE.BoxHelper(m, 0xFF2FB0);
+    scene.add(box);
+    aiOutlines.push(box);
+  });
+}
+
+function selectMesh(mesh){
+  clearOutline();
+  const box = new THREE.BoxHelper(mesh, 0x2FD9C4);
+  box.material.linewidth = 2;
+  scene.add(box);
+  selectedOutline = box;
+  showInfo(mesh.userData.semantic);
+}
+
+function onPointerDown(evt){
+  const rect = renderer.domElement.getBoundingClientRect();
+  const cx = (evt.touches ? evt.touches[0].clientX : evt.clientX);
+  const cy = (evt.touches ? evt.touches[0].clientY : evt.clientY);
+  pointer.x = ((cx-rect.left)/rect.width)*2 - 1;
+  pointer.y = -((cy-rect.top)/rect.height)*2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const visibleInteractive = interactive.filter(m=>{
+    let o = m; while(o){ if(o.visible===false) return false; o = o.parent; }
+    return true;
+  });
+  const hits = raycaster.intersectObjects(visibleInteractive, false);
+  if(hits.length){ selectMesh(hits[0].object); }
+}
+renderer.domElement.addEventListener('click', onPointerDown);
+renderer.domElement.style.cursor = 'grab';
+controls.addEventListener('start', ()=>renderer.domElement.style.cursor='grabbing');
+controls.addEventListener('end', ()=>renderer.domElement.style.cursor='grab');
+
+/* ============================================================
+   7b. ROUTE PLANNER (Phase 2)
+   ============================================================ */
+const routeStartSel = document.getElementById('route-start');
+const routeDestSel = document.getElementById('route-dest');
+FLOORS.forEach(fd=>{
+  fd.rooms.forEach(r=>{
+    const opt = document.createElement('option');
+    opt.value = r.id;
+    opt.textContent = `${r.label} · Floor ${fd.id}`;
+    routeStartSel.appendChild(opt);
+  });
+});
+EXITS.forEach(ex=>{
+  const opt = document.createElement('option');
+  opt.value = ex.id;
+  opt.textContent = ex.label;
+  routeDestSel.appendChild(opt);
+});
+const routeWhatifSel = document.getElementById('route-whatif');
+EXITS.forEach(ex=>{
+  const opt = document.createElement('option');
+  opt.value = ex.id;
+  opt.textContent = `What if ${ex.label} becomes unavailable?`;
+  routeWhatifSel.appendChild(opt);
+});
+
+const routePanel = document.getElementById('route-panel');
+const btnRoutes = document.getElementById('btn-routes');
+function setRoutePanelOpen(open){
+  routePanel.style.display = open ? 'block' : 'none';
+  btnRoutes.classList.toggle('active', open);
+  if(window.innerWidth < 760){
+    document.getElementById('overview-panel').style.display = open ? 'none' : 'block';
+    if(open){ setEmergencyPanelOpen(false); if(typeof setAssistantPanelOpen==='function') setAssistantPanelOpen(false); }
+  }
+}
+btnRoutes.addEventListener('click', ()=> setRoutePanelOpen(routePanel.style.display==='none' || !routePanel.style.display));
+document.getElementById('route-close').addEventListener('click', ()=>{ setRoutePanelOpen(false); clearRoute(); });
+
+let routeObjects = [], routeCurve = null, routeFlowMarker = null, routeFlowT = 0, lastRouteResults = [];
+
+function nodeWorldPos(id){
+  const n = GRAPH.nodes[id];
+  return new THREE.Vector3(n.x, n.elevation + 0.7, n.z);
+}
+function clearRoute(){
+  routeObjects.forEach(o=>scene.remove(o));
+  routeObjects = []; routeCurve = null; routeFlowMarker = null;
+}
+function drawRoute(path){
+  clearRoute();
+  const pts = path.map(nodeWorldPos);
+  const color = 0xFF2FB0;
+  const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.12);
+
+  // soft outer glow layer for extra prominence against the blue/cyan building palette
+  const glowGeo = new THREE.TubeGeometry(curve, Math.max(pts.length*8, 30), 0.42, 8, false);
+  const glowMat = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.16, depthWrite:false });
+  const glow = new THREE.Mesh(glowGeo, glowMat);
+  scene.add(glow); routeObjects.push(glow);
+
+  const tubeGeo = new THREE.TubeGeometry(curve, Math.max(pts.length*8, 30), 0.24, 8, false);
+  const tubeMat = new THREE.MeshStandardMaterial({ color, emissive:color, emissiveIntensity:1.15, roughness:0.25, metalness:0.1 });
+  const tube = new THREE.Mesh(tubeGeo, tubeMat);
+  scene.add(tube); routeObjects.push(tube);
+  [pts[0], pts[pts.length-1]].forEach(p=>{
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.46,16,16), new THREE.MeshStandardMaterial({ color, emissive:color, emissiveIntensity:1.3 }));
+    m.position.copy(p);
+    scene.add(m); routeObjects.push(m);
+  });
+  const flow = new THREE.Mesh(new THREE.SphereGeometry(0.28,12,12), new THREE.MeshBasicMaterial({ color:0xffffff }));
+  scene.add(flow); routeObjects.push(flow);
+  routeCurve = curve; routeFlowMarker = flow; routeFlowT = 0;
+}
+
+function summarizePathToGuidance(path){
+  const steps = [];
+  let i = 0;
+  while(i < path.length){
+    const id = path[i];
+    const node = GRAPH.nodes[id];
+    if(!node){ i++; continue; }
+    const kind = node.kind;
+    if(kind==='room'){
+      steps.push(`Leave ${registry[id]?.label || id}.`);
+      i++;
+    } else if(kind==='exit'){
+      steps.push(`Exit through ${registry[id]?.label || id}.`);
+      i++;
+    } else if(kind==='corridor'){
+      const isBranch = id.startsWith('branch_');
+      let j = i;
+      while(j<path.length && GRAPH.nodes[path[j]] && GRAPH.nodes[path[j]].kind==='corridor' && path[j].startsWith('branch_')===isBranch) j++;
+      steps.push(`Proceed through the ${isBranch ? 'North Corridor Branch' : 'Central Corridor'}${node.floor?` on ${FLOORS[node.floor-1]?.name||'Floor '+node.floor}`:''}.`);
+      i = j;
+    } else if(kind==='stair' || kind==='elevator'){
+      const baseId = id.replace(/_f\d+$/,'');
+      const startFloor = node.floor;
+      let j = i;
+      while(j<path.length && GRAPH.nodes[path[j]] && GRAPH.nodes[path[j]].kind===kind) j++;
+      const endFloor = GRAPH.nodes[path[j-1]].floor;
+      const dir = endFloor < startFloor ? 'down' : 'up';
+      const label = registry[baseId]?.label || baseId;
+      steps.push(`Take ${label} ${dir} to ${FLOORS[endFloor-1]?.name || 'Floor '+endFloor}.`);
+      i = j;
+    } else { i++; }
+  }
+  return steps;
+}
+function renderGuidance(result){
+  const box = document.getElementById('route-guidance');
+  if(!result){ box.innerHTML=''; return; }
+  const steps = summarizePathToGuidance(result.path);
+  box.innerHTML = `
+    <div class="guidance-title">Occupant guidance</div>
+    <ol class="guidance-list">${steps.map(s=>`<li>${s}</li>`).join('')}</ol>
+    <p class="guidance-note">Generated directly from the calculated route. Follow official responder instructions.</p>
+  `;
+}
+function renderRouteResults(results){
+  lastRouteResults = results;
+  const box = document.getElementById('route-results');
+  if(!results.length){ box.innerHTML = '<div class="route-item">No available route found from this location.</div>'; return; }
+  box.innerHTML = results.map((r,i)=>{
+    const color = r.status==='blocked' ? '#F87171' : (r.status==='restricted' ? '#FBBF24' : '#34D399');
+    const label = r.status==='blocked' ? 'Blocked' : (r.status==='restricted' ? 'Caution' : 'Available');
+    return `<div class="route-item${i===0?' active':''}" data-idx="${i}">
+      <div class="rt-top"><span class="rt-name">Route ${i+1} — ${r.label}</span><span class="rt-dist">${r.distance.toFixed(0)} m</span></div>
+      <span class="status-pill" style="background:${color}22; color:${color};">${label}</span>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('.route-item[data-idx]').forEach(el=>{
+    el.addEventListener('click', ()=> selectRouteResult(parseInt(el.dataset.idx,10)));
+  });
+}
+function selectRouteResult(idx){
+  document.querySelectorAll('#route-results .route-item').forEach(el=>el.classList.remove('active'));
+  const el = document.querySelector(`#route-results .route-item[data-idx="${idx}"]`);
+  if(el) el.classList.add('active');
+  const r = lastRouteResults[idx];
+  if(r){ drawRoute(r.path); renderGuidance(r); }
+}
+
+document.getElementById('route-calc').addEventListener('click', ()=>{
+  const start = routeStartSel.value;
+  const destVal = routeDestSel.value;
+  const whatifExit = routeWhatifSel.value;
+  const banner = document.getElementById('route-whatif-banner');
+
+  // temporarily apply the hypothetical block, compute, then always restore real state
+  let restore = null;
+  if(whatifExit !== 'none'){
+    const touched = [];
+    Object.values(GRAPH.edgesById).forEach(e=>{
+      if(e.a===whatifExit || e.b===whatifExit){ touched.push({ e, prev:e.status }); e.status = 'blocked'; }
+    });
+    restore = ()=> touched.forEach(t=> t.e.status = t.prev);
+  }
+
+  let results = [];
+  if(destVal==='nearest'){
+    EXITS.forEach(ex=>{
+      const r = GRAPH.dijkstra(start, ex.id);
+      if(r) results.push({ label:ex.label, distance:r.distance, status:r.status, path:r.path });
+    });
+    results.sort((a,b)=>a.distance-b.distance);
+  } else {
+    const r = GRAPH.dijkstra(start, destVal);
+    const ex = EXITS.find(e=>e.id===destVal);
+    if(r) results.push({ label: ex ? ex.label : destVal, distance:r.distance, status:r.status, path:r.path });
+  }
+  if(restore) restore(); // real GRAPH/EMERGENCY state is untouched by the what-if
+
+  if(whatifExit !== 'none'){
+    banner.style.display = 'block';
+    banner.textContent = `⚡ What-if scenario: assuming ${EXITS.find(e=>e.id===whatifExit)?.label} is also unavailable. This does not change the real building state.`;
+  } else {
+    banner.style.display = 'none';
+  }
+
+  renderRouteResults(results);
+  document.getElementById('route-guidance').innerHTML = '';
+  if(results.length){ drawRoute(results[0].path); renderGuidance(results[0]); }
+  if(currentFloor!=='all'){
+    currentFloor = 'all';
+    [...floorSeg.children].forEach(c=>c.classList.remove('active'));
+    floorSeg.children[0].classList.add('active');
+    setFloorVisibility();
+  }
+  flyTo(DEFAULT_CAM, TARGET_CENTER);
+});
+
+document.getElementById('report-export-btn').addEventListener('click', ()=>{
+  const btn = document.getElementById('report-export-btn');
+  const report = {
+    building: 'Central Mall',
+    generatedAt: new Date().toISOString(),
+    incident: EMERGENCY.active ? {
+      type: EMERGENCY.type,
+      floor: EMERGENCY.floor,
+      floorName: FLOORS[EMERGENCY.floor-1]?.name,
+      severity: EMERGENCY.severity,
+      activatedAt: EMERGENCY.timestamp ? EMERGENCY.timestamp.toISOString() : null,
+      hazardRooms: [...EMERGENCY.hazardRooms].map(id=>({ id, label: registry[id]?.label || id })),
+      blockedExits: [...EMERGENCY.blockedExits].map(id=>({ id, label: registry[id]?.label || id })),
+      blockedCorridors: [...EMERGENCY.blockedCorridors],
+      elevatorsAvailable: false,
+    } : { status:'No active incident' },
+    calculatedRoutes: lastRouteResults.map(r=>({
+      destination: r.label,
+      distanceMeters: Math.round(r.distance),
+      status: r.status,
+      path: r.path.map(id=> registry[id]?.label || (GRAPH.nodes[id]&&GRAPH.nodes[id].kind) || id),
+      occupantGuidance: summarizePathToGuidance(r.path),
+    })),
+    disclaimer: 'System-generated decision-support report — Simulation / Decision Support Prototype. Not an official emergency command document. Follow official responder instructions.',
+  };
+  try{
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'emergencytwin_incident_report.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }catch(e){
+    btn.textContent = 'Export failed — try again';
+    setTimeout(()=> btn.textContent='Export incident report (JSON)', 2400);
+  }
+});
+
+/* ============================================================
+   7c. EMERGENCY PANEL (Phase 3)
+   ============================================================ */
+let incidentDraft = { floor:1, severity:'High', hazardRooms:new Set(), blockedExits:new Set(), blockedCorridors:new Set() };
+
+function renderEmergencyPanel(){
+  const box = document.getElementById('emergency-body');
+  const badge = document.getElementById('phase-badge');
+  if(EMERGENCY.active){
+    badge.textContent = `🔥 Fire — Floor ${EMERGENCY.floor} active`;
+    badge.classList.add('live');
+    const fd = FLOORS[EMERGENCY.floor-1];
+    box.innerHTML = `
+      <div class="incident-banner">
+        <div class="ib-title"><span class="ib-dot"></span>Active incident — Fire</div>
+        <div class="ib-sub">${fd.name} · Severity: ${EMERGENCY.severity}</div>
+      </div>
+      <div class="kv"><span class="k">Hazard rooms</span><span class="v">${EMERGENCY.hazardRooms.size}</span></div>
+      <div class="kv"><span class="k">Blocked exits</span><span class="v">${EMERGENCY.blockedExits.size}</span></div>
+      <div class="kv"><span class="k">Blocked corridors</span><span class="v">${EMERGENCY.blockedCorridors.size}</span></div>
+      <div class="kv"><span class="k">Elevators</span><span class="v" style="color:#FF9B9B;">Unavailable</span></div>
+      <p class="em-note">Elevators are automatically excluded from evacuation routing during any fire incident. Recalculate any open route to see the effect.</p>
+      <button class="ghost-btn" id="emergency-clear">Clear incident</button>
+    `;
+    document.getElementById('emergency-clear').addEventListener('click', ()=>{ resetEmergency(); renderEmergencyPanel(); });
+  } else {
+    badge.textContent = 'Hackathon build · Voice coming next';
+    badge.classList.remove('live');
+    const fd = FLOORS[incidentDraft.floor-1];
+    box.innerHTML = `
+      <span class="field-label">Incident type</span>
+      <select disabled style="opacity:0.55;"><option>Fire</option></select>
+      <span class="field-label">Floor</span>
+      <select id="em-floor">${FLOORS.map(f=>`<option value="${f.id}" ${f.id===incidentDraft.floor?'selected':''}>${f.name}</option>`).join('')}</select>
+      <span class="field-label">Severity</span>
+      <select id="em-severity">
+        <option value="High" ${incidentDraft.severity==='High'?'selected':''}>High</option>
+        <option value="Medium" ${incidentDraft.severity==='Medium'?'selected':''}>Medium</option>
+      </select>
+      <div class="em-section-label">Hazard rooms (blocked)</div>
+      <div class="chip-group" id="em-rooms">${fd.rooms.map(r=>`<span class="chip${incidentDraft.hazardRooms.has(r.id)?' active':''}" data-room="${r.id}">${r.label}</span>`).join('')}</div>
+      <div class="em-section-label">Blocked corridors</div>
+      <div class="chip-group" id="em-corridors">${CORRIDOR_SHAPE.map(seg=>{ const key=`${seg.id.replace('corridor_','')}_f${fd.id}`; return `<span class="chip${incidentDraft.blockedCorridors.has(key)?' active':''}" data-corridor="${key}">${seg.label}</span>`; }).join('')}</div>
+      ${fd.id===1 ? `<div class="em-section-label">Blocked exits</div><div class="chip-group" id="em-exits">${EXITS.map(ex=>`<span class="chip${incidentDraft.blockedExits.has(ex.id)?' active':''}" data-exit="${ex.id}">${ex.label}</span>`).join('')}</div>`
+                   : `<p class="em-note">Exits are only on Floor 1 — block a corridor above to cut this floor's path down.</p>`}
+      <button class="danger-btn" id="emergency-activate">Activate fire emergency</button>
+    `;
+    document.getElementById('em-floor').addEventListener('change', (e)=>{
+      incidentDraft = { floor: parseInt(e.target.value,10), severity: incidentDraft.severity, hazardRooms:new Set(), blockedExits:new Set(), blockedCorridors:new Set() };
+      renderEmergencyPanel();
+    });
+    document.getElementById('em-severity').addEventListener('change', (e)=>{ incidentDraft.severity = e.target.value; });
+    box.querySelectorAll('#em-rooms .chip').forEach(chip=>{
+      chip.addEventListener('click', ()=>{
+        const id = chip.dataset.room;
+        incidentDraft.hazardRooms.has(id) ? incidentDraft.hazardRooms.delete(id) : incidentDraft.hazardRooms.add(id);
+        chip.classList.toggle('active');
+      });
+    });
+    box.querySelectorAll('#em-corridors .chip').forEach(chip=>{
+      chip.addEventListener('click', ()=>{
+        const key = chip.dataset.corridor;
+        incidentDraft.blockedCorridors.has(key) ? incidentDraft.blockedCorridors.delete(key) : incidentDraft.blockedCorridors.add(key);
+        chip.classList.toggle('active');
+      });
+    });
+    const exitsBox = box.querySelector('#em-exits');
+    if(exitsBox){
+      exitsBox.querySelectorAll('.chip').forEach(chip=>{
+        chip.addEventListener('click', ()=>{
+          const id = chip.dataset.exit;
+          incidentDraft.blockedExits.has(id) ? incidentDraft.blockedExits.delete(id) : incidentDraft.blockedExits.add(id);
+          chip.classList.toggle('active');
+        });
+      });
+    }
+    document.getElementById('emergency-activate').addEventListener('click', ()=>{
+      activateEmergency(incidentDraft);
+      renderEmergencyPanel();
+      currentFloor = EMERGENCY.floor;
+      [...floorSeg.children].forEach(c=>c.classList.remove('active'));
+      floorSeg.children[EMERGENCY.floor].classList.add('active');
+      setFloorVisibility();
+      focusFloor(EMERGENCY.floor);
+    });
+  }
+}
+
+const emergencyPanel = document.getElementById('emergency-panel');
+const btnEmergency = document.getElementById('btn-emergency');
+function setEmergencyPanelOpen(open){
+  emergencyPanel.style.display = open ? 'block' : 'none';
+  btnEmergency.classList.toggle('active', open);
+  if(open) renderEmergencyPanel();
+  if(open && typeof setAssistantPanelOpen==='function') setAssistantPanelOpen(false);
+  if(window.innerWidth < 760){
+    document.getElementById('overview-panel').style.display = open ? 'none' : 'block';
+    if(open) setRoutePanelOpen(false);
+  }
+}
+btnEmergency.addEventListener('click', ()=> setEmergencyPanelOpen(emergencyPanel.style.display==='none' || !emergencyPanel.style.display));
+document.getElementById('emergency-close').addEventListener('click', ()=> setEmergencyPanelOpen(false));
+
+/* ============================================================
+   7d. VOICE ASSISTANT — tool functions + panel scaffold
+   ============================================================
+   The tool bodies below (toolFindRoute / toolHighlight) are plain,
+   framework-free functions — reused as the AssemblyAI Voice Agent's
+   tool.call targets once the WebSocket integration is wired in.
+   No LLM call happens in this build; the mic button below is a
+   placeholder until that step.
+*/
+
+function toolFindRoute(startId, destinationId){
+  if(!GRAPH.nodes[startId]) return { error:`Unknown id "${startId}" — use one of the ids in the building data.` };
+  let best = null;
+  if(destinationId){
+    const r = GRAPH.dijkstra(startId, String(destinationId));
+    if(r) best = { label: registry[destinationId]?.label || String(destinationId), ...r };
+  } else {
+    EXITS.forEach(ex=>{
+      const r = GRAPH.dijkstra(startId, ex.id);
+      if(r && (!best || r.distance < best.distance)) best = { label: ex.label, ...r };
+    });
+  }
+  if(!best) return { error:'No available route found — every path may currently be blocked.' };
+  drawRoute(best.path);
+  renderRouteResults([{ label:best.label, distance:best.distance, status:best.status, path:best.path }]);
+  renderGuidance({ label:best.label, distance:best.distance, status:best.status, path:best.path });
+  if(currentFloor!=='all'){
+    currentFloor = 'all';
+    [...floorSeg.children].forEach(c=>c.classList.remove('active'));
+    floorSeg.children[0].classList.add('active');
+    setFloorVisibility();
+  }
+  flyTo(DEFAULT_CAM, TARGET_CENTER);
+  return {
+    from: registry[startId]?.label || startId,
+    to: best.label,
+    distanceMeters: Math.round(best.distance),
+    status: best.status,
+    path: best.path.map(id=> registry[id]?.label || (GRAPH.nodes[id]&&GRAPH.nodes[id].kind) || id),
+  };
+}
+
+function toolHighlight(ids){
+  const list = Array.isArray(ids) ? ids.map(String) : [];
+  const found = list.map(id=>{
+    const mesh = roomMeshes[id] || (exitVisuals[id] && exitVisuals[id].post) || interactive.find(m=>m.userData.semantic && m.userData.semantic.id===id);
+    return { id, mesh };
+  }).filter(x=>x.mesh);
+  if(!found.length) return { error:'None of the given ids were found in the building.' };
+  highlightMultiple(found.map(f=>f.mesh));
+  const floors = [...new Set(found.map(f=>f.mesh.userData.semantic && f.mesh.userData.semantic.floor).filter(v=>v!==undefined && v!=='All (1–3)'))];
+  if(floors.length===1){
+    currentFloor = floors[0];
+    [...floorSeg.children].forEach(c=>c.classList.remove('active'));
+    floorSeg.children[floors[0]].classList.add('active');
+    setFloorVisibility();
+    focusFloor(floors[0]);
+  } else if(currentFloor!=='all'){
+    currentFloor = 'all';
+    [...floorSeg.children].forEach(c=>c.classList.remove('active'));
+    floorSeg.children[0].classList.add('active');
+    setFloorVisibility();
+    flyTo(DEFAULT_CAM, TARGET_CENTER);
+  }
+  return { highlighted: found.map(f=> (f.mesh.userData.semantic && f.mesh.userData.semantic.label) || f.id) };
+}
+
+function toolGetBuildingStatus(){
+  return {
+    building: 'Central Mall',
+    floors: FLOORS.length,
+    incident: EMERGENCY.active ? {
+      type: EMERGENCY.type,
+      floor: EMERGENCY.floor,
+      severity: EMERGENCY.severity,
+      hazardRooms: [...EMERGENCY.hazardRooms].map(id=>registry[id]?.label||id),
+      blockedExits: [...EMERGENCY.blockedExits].map(id=>registry[id]?.label||id),
+      blockedCorridors: [...EMERGENCY.blockedCorridors],
+      elevatorsAvailable: false,
+    } : { status: 'No active incident — building is fully available.' },
+  };
+}
+
+function ensureIncidentContext(floor, severity){
+  if(!EMERGENCY.active){
+    activateEmergency({ floor: floor||1, severity: severity||'Medium', hazardRooms:[], blockedExits:[], blockedCorridors:[] });
+  }
+}
+
+function toolCreateIncident(floor, severity, hazardRoomIds){
+  const f = Number(floor)||1;
+  activateEmergency({
+    floor: f,
+    severity: severity==='Medium' ? 'Medium' : 'High',
+    hazardRooms: Array.isArray(hazardRoomIds) ? hazardRoomIds : [],
+    blockedExits: [],
+    blockedCorridors: [],
+  });
+  currentFloor = f;
+  [...floorSeg.children].forEach(c=>c.classList.remove('active'));
+  floorSeg.children[f].classList.add('active');
+  setFloorVisibility();
+  focusFloor(f);
+  setEmergencyPanelOpen(true);
+  return { ok:true, message:`Fire incident created on Floor ${f} (${severity||'High'} severity).`, status:toolGetBuildingStatus() };
+}
+
+function toolBlockExit(exitId){
+  const ex = EXITS.find(e=>e.id===exitId);
+  if(!ex) return { error:`Unknown exit id "${exitId}".` };
+  ensureIncidentContext(EMERGENCY.floor||1, EMERGENCY.severity||'Medium');
+  EMERGENCY.blockedExits.add(exitId);
+  blockAllEdgesTouching(exitId, 'blocked');
+  setExitHazard(exitId, 'blocked');
+  renderEmergencyPanel();
+  setEmergencyPanelOpen(true);
+  return { ok:true, message:`${ex.label} is now marked unavailable. Affected routes will be recalculated.`, status:toolGetBuildingStatus() };
+}
+
+const VOICE_TOOLS = {
+  find_route: (args)=> toolFindRoute(args.start, args.destination),
+  highlight: (args)=> toolHighlight(args.ids),
+  get_building_status: ()=> toolGetBuildingStatus(),
+  create_incident: (args)=> toolCreateIncident(args.floor, args.severity, args.hazard_room_ids),
+  block_exit: (args)=> toolBlockExit(args.exit_id),
+};
+
+const VOICE_TOOL_SCHEMAS = [
+  {
+    name:'find_route',
+    description:'Computes the real shortest evacuation route from a starting room/exit id to a destination exit id (optional — omit for the nearest available exit) and highlights it in the 3D scene.',
+    parameters:{ type:'object', properties:{
+      start:{ type:'string', description:'Room or exit id, e.g. "room305".' },
+      destination:{ type:'string', description:'Exit id, e.g. "exit_east". Omit for nearest available exit.' },
+    }, required:['start'] },
+  },
+  {
+    name:'highlight',
+    description:'Highlights one or more building objects (rooms, exits, stairs, elevator) by id in the 3D scene.',
+    parameters:{ type:'object', properties:{
+      ids:{ type:'array', items:{ type:'string' }, description:'Object ids, e.g. ["room305","exit_east"].' },
+    }, required:['ids'] },
+  },
+  {
+    name:'get_building_status',
+    description:'Returns the current live state of the digital twin: whether a fire incident is active, which floor, severity, hazard rooms, blocked exits/corridors, and elevator availability.',
+    parameters:{ type:'object', properties:{} },
+  },
+  {
+    name:'create_incident',
+    description:'Starts a fire incident on the given floor. Use when Security says something like "start a fire on floor 2" or "there is a fire".',
+    parameters:{ type:'object', properties:{
+      floor:{ type:'integer', description:'Floor number, 1-3.' },
+      severity:{ type:'string', enum:['High','Medium'] },
+      hazard_room_ids:{ type:'array', items:{ type:'string' }, description:'Optional room ids to mark as the hazard zone.' },
+    }, required:['floor'] },
+  },
+  {
+    name:'block_exit',
+    description:'Marks a specific emergency exit unavailable and recalculates affected routes. Use for commands like "block the west exit".',
+    parameters:{ type:'object', properties:{
+      exit_id:{ type:'string', description:'Exit id: exit_west, exit_north, exit_south, or exit_east.' },
+    }, required:['exit_id'] },
+  },
+];
+function scrollChatToBottom(){ chatLog.scrollTop = chatLog.scrollHeight; }
+function appendChatMsg(role, text){
+  const el = document.createElement('div');
+  el.className = 'chat-msg ' + role;
+  el.textContent = text;
+  chatLog.appendChild(el);
+  scrollChatToBottom();
+  return el;
+}
+
+let voiceMode = 'security';
+const modeSecurityBtn = document.getElementById('mode-security');
+const modeOccupantBtn = document.getElementById('mode-occupant');
+modeSecurityBtn.addEventListener('click', ()=>{
+  if(voiceClient.connected) return;
+  voiceMode = 'security';
+  modeSecurityBtn.classList.add('active');
+  modeOccupantBtn.classList.remove('active');
+});
+modeOccupantBtn.addEventListener('click', ()=>{
+  if(voiceClient.connected) return;
+  voiceMode = 'occupant';
+  modeOccupantBtn.classList.add('active');
+  modeSecurityBtn.classList.remove('active');
+});
+
+function getBuildingContext(){
+  const roomList = FLOORS.flatMap(fd=>fd.rooms.map(r=>`${r.id} | ${r.label} | Floor ${fd.id} | ${r.subtype}`)).join('\n');
+  const exitList = EXITS.map(ex=>`${ex.id} | ${ex.label} | Floor 1`).join('\n');
+  return `BUILDING: Central Mall, 3 floors.\nRooms (id | label | floor | type):\n${roomList}\nEmergency exits (id | label | floor):\n${exitList}\nStairwells: stairA, stairB. Elevator: elevatorA (all automatically unavailable during any active fire incident).`;
+}
+function systemPromptFor(mode){
+  const base = `You are the voice assistant for EmergencyTwin AI, a live 3D digital twin of a building used for emergency-response decision support. Never invent rooms, exits, distances or routes — only use the building data below and your tools. If something isn't in the digital twin, say so. Keep spoken replies short (1-2 sentences) — this is a voice conversation, not a chat.\n\n${getBuildingContext()}`;
+  if(mode==='security'){
+    return base + `\n\nMODE: SECURITY / EMERGENCY OPERATOR. The person is trained security staff. They may ask what's happening on a floor, which exits are available, ask you to start a fire incident, block a specific exit, or ask for a route to check. Use create_incident, block_exit, get_building_status, find_route and highlight as needed. Confirm out loud what you changed after acting.`;
+  }
+  return base + `\n\nMODE: BUILDING OCCUPANT. The person is inside the building and may be anxious. They will describe where they are (e.g. "I'm near the food court on floor 1" — match that to the closest room id). Call find_route with their location as the start and no destination (nearest exit). Give calm, brief spoken directions based only on the tool result. Never guess a route yourself.`;
+}
+
+const voiceClient = {
+  ws: null,
+  connected: false,
+  audioCtx: null,
+  micStream: null,
+  micNode: null,
+  playHead: 0,
+  pendingToolResults: [],
+  currentAssistantEl: null,
+
+  async connect(){
+    appendChatMsg('assistant', 'Connecting…');
+    let token;
+    try{
+      const res = await fetch('/api/voice-token');
+      if(!res.ok) throw new Error('token endpoint returned ' + res.status);
+      ({ token } = await res.json());
+    }catch(e){
+      appendChatMsg('assistant', "Couldn't reach /api/voice-token — this only works once deployed (e.g. on Vercel) with ASSEMBLYAI_API_KEY set as an environment variable.");
+      return;
+    }
+
+    this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    const workletCode = `
+      class PCMWorklet extends AudioWorkletProcessor {
+        process(inputs){
+          const ch = inputs[0][0];
+          if(ch){
+            const pcm16 = new Int16Array(ch.length);
+            for(let i=0;i<ch.length;i++){
+              let s = Math.max(-1, Math.min(1, ch[i]));
+              pcm16[i] = s < 0 ? s*0x8000 : s*0x7FFF;
+            }
+            this.port.postMessage(pcm16.buffer, [pcm16.buffer]);
+          }
+          return true;
+        }
+      }
+      registerProcessor('pcm-worklet', PCMWorklet);
+    `;
+    const blobUrl = URL.createObjectURL(new Blob([workletCode], { type:'application/javascript' }));
+    await this.audioCtx.audioWorklet.addModule(blobUrl);
+
+    try{
+      this.micStream = await navigator.mediaDevices.getUserMedia({ audio:{ channelCount:1 } });
+    }catch(e){
+      appendChatMsg('assistant', 'Microphone permission was not granted.');
+      return;
+    }
+
+    const wsUrl = new URL('wss://agents.assemblyai.com/v1/ws');
+    wsUrl.searchParams.set('token', token);
+    this.ws = new WebSocket(wsUrl.toString());
+
+    this.ws.onopen = ()=>{
+      this.ws.send(JSON.stringify({
+        type:'session.update',
+        session:{
+          system_prompt: systemPromptFor(voiceMode),
+          greeting: voiceMode==='security' ? "Security console ready. What's the situation?" : "Hi, I can help you find the nearest exit. Where are you?",
+          tools: VOICE_TOOL_SCHEMAS,
+          output: { voice:'ivy' },
+        },
+      }));
+    };
+
+    this.ws.onmessage = (evt)=> this.handleServerEvent(JSON.parse(evt.data));
+    this.ws.onerror = ()=>{ appendChatMsg('assistant', 'Voice connection error.'); };
+    this.ws.onclose = ()=>{ this.teardownAudio(); this.setLiveUI(false); };
+  },
+
+  startMic(){
+    const source = this.audioCtx.createMediaStreamSource(this.micStream);
+    this.micNode = new AudioWorkletNode(this.audioCtx, 'pcm-worklet');
+    this.micNode.port.onmessage = (e)=>{
+      if(this.ws && this.ws.readyState===WebSocket.OPEN){
+        this.ws.send(JSON.stringify({ type:'input.audio', audio: arrayBufferToBase64(e.data) }));
+      }
+    };
+    const silentGain = this.audioCtx.createGain();
+    silentGain.gain.value = 0; // keep the worklet in the active audio graph without audible mic monitoring
+    source.connect(this.micNode).connect(silentGain).connect(this.audioCtx.destination);
+  },
+
+  handleServerEvent(evt){
+    switch(evt.type){
+      case 'session.ready':
+        this.connected = true;
+        this.setLiveUI(true);
+        this.startMic();
+        appendChatMsg('assistant', `Connected — ${voiceMode==='security'?'Security':'Occupant'} mode. Speak now.`);
+        break;
+      case 'input.speech.started':
+        this.stopPlayback();
+        break;
+      case 'transcript.user':
+        appendChatMsg('user', evt.text || '');
+        break;
+      case 'reply.started':
+        this.currentAssistantEl = null;
+        break;
+      case 'reply.audio':
+        this.playChunk(evt.audio);
+        break;
+      case 'transcript.agent':
+        appendChatMsg('assistant', evt.text || '');
+        break;
+      case 'tool.call':
+        this.runTool(evt);
+        break;
+      case 'reply.done':
+        if(this.pendingToolResults.length && this.ws && this.ws.readyState===WebSocket.OPEN){
+          this.pendingToolResults.forEach(r=> this.ws.send(JSON.stringify(r)));
+          this.pendingToolResults = [];
+        }
+        break;
+      case 'session.error':
+      case 'error':
+        appendChatMsg('assistant', 'Voice agent error: ' + (evt.message || 'unknown'));
+        break;
+      default: break;
+    }
+  },
+
+  runTool(evt){
+    const name = evt.name;
+    const args = evt.arguments || evt.args || {};
+    const fn = VOICE_TOOLS[name];
+    let result;
+    try{ result = fn ? fn(args) : { error:`Unknown tool "${name}".` }; }
+    catch(e){ result = { error: String(e && e.message || e) }; }
+    this.pendingToolResults.push({ type:'tool.result', call_id: evt.call_id, result: JSON.stringify(result) });
+  },
+
+  playChunk(base64){
+    const bytes = atob(base64);
+    const buf = new Uint8Array(bytes.length);
+    for(let i=0;i<bytes.length;i++) buf[i] = bytes.charCodeAt(i);
+    const pcm16 = new Int16Array(buf.buffer);
+    const float32 = new Float32Array(pcm16.length);
+    for(let i=0;i<pcm16.length;i++) float32[i] = pcm16[i] / 32768;
+    const audioBuffer = this.audioCtx.createBuffer(1, float32.length, 24000);
+    audioBuffer.copyToChannel(float32, 0);
+    const src = this.audioCtx.createBufferSource();
+    src.buffer = audioBuffer;
+    src.connect(this.audioCtx.destination);
+    const now = this.audioCtx.currentTime;
+    if(this.playHead < now) this.playHead = now;
+    src.start(this.playHead);
+    this.playHead += audioBuffer.duration;
+  },
+  stopPlayback(){ this.playHead = this.audioCtx ? this.audioCtx.currentTime : 0; },
+
+  teardownAudio(){
+    if(this.micStream) this.micStream.getTracks().forEach(t=>t.stop());
+    if(this.audioCtx) this.audioCtx.close();
+    this.micStream = null; this.audioCtx = null; this.micNode = null;
+  },
+  setLiveUI(live){
+    this.connected = live;
+    micBtn.classList.toggle('live', live);
+    micLabel.textContent = live ? 'End voice session' : 'Start voice session';
+  },
+  disconnect(){
+    if(this.ws) this.ws.close();
+    this.teardownAudio();
+    this.setLiveUI(false);
+  },
+};
+
+function arrayBufferToBase64(buffer){
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for(let i=0;i<bytes.byteLength;i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+const micBtn = document.getElementById('mic-btn');
+const micLabel = document.getElementById('mic-label');
+micBtn.addEventListener('click', ()=>{
+  if(voiceClient.connected) voiceClient.disconnect();
+  else voiceClient.connect();
+});
+
+const assistantPanel = document.getElementById('assistant-panel');
+const btnAssistant = document.getElementById('btn-assistant');
+function setAssistantPanelOpen(open){
+  assistantPanel.style.display = open ? 'flex' : 'none';
+  btnAssistant.classList.toggle('active', open);
+  if(open) setEmergencyPanelOpen(false);
+  if(window.innerWidth < 760){
+    document.getElementById('overview-panel').style.display = open ? 'none' : 'block';
+    if(open) setRoutePanelOpen(false);
+  }
+}
+btnAssistant.addEventListener('click', ()=> setAssistantPanelOpen(assistantPanel.style.display==='none' || !assistantPanel.style.display));
+document.getElementById('assistant-close').addEventListener('click', ()=> setAssistantPanelOpen(false));
+
+/* ============================================================
+   8. RESIZE + RENDER LOOP
+   ============================================================ */
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+function updateLabels(){
+  const w = window.innerWidth, h = window.innerHeight;
+  for(const L of labels){
+    let show = isEffectivelyVisible(L.mesh);
+    if(show){
+      if(L.floorId!=='all'){
+        if(currentFloor==='all'){
+          show = false; // overview mode stays clean; switch to a single floor for room/door/object labels
+        } else if(String(L.floorId)!==String(currentFloor)){
+          show = false;
+        }
+      }
+    }
+    if(!show){ if(L.el.style.display!=='none') L.el.style.display='none'; continue; }
+    const p = L.mesh.position.clone();
+    p.y += L.yOffset;
+    p.project(camera);
+    if(p.z>1 || p.z<-1){ L.el.style.display='none'; continue; }
+    const x = (p.x*0.5+0.5)*w, y = (-p.y*0.5+0.5)*h;
+    if(x<-80||x>w+80||y<-40||y>h+40){ L.el.style.display='none'; continue; }
+    L.el.style.display = 'flex';
+    L.el.style.transform = `translate(-50%,-100%) translate(${x}px,${y}px)`;
+  }
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  if(selectedOutline) selectedOutline.update();
+  if(aiOutlines.length) aiOutlines.forEach(o=>o.update());
+  if(routeCurve && routeFlowMarker){
+    routeFlowT += 0.0032;
+    if(routeFlowT>1) routeFlowT=0;
+    routeFlowMarker.position.copy(routeCurve.getPointAt(routeFlowT));
+  }
+  renderer.render(scene, camera);
+  updateLabels();
+}
+
+// intro fly-in
+camera.position.set(90, 78, 96);
+controls.target.copy(TARGET_CENTER);
+animate();
+setTimeout(()=>{
+  document.getElementById('loading').style.opacity = '0';
+  setTimeout(()=>document.getElementById('loading').remove(), 420);
+  flyTo(DEFAULT_CAM, TARGET_CENTER);
+}, 260);
+
+})();
+</script>
+</body>
+</html>
