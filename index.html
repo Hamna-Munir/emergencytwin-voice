@@ -366,7 +366,7 @@
     <div class="seg"><button id="btn-routes">Routes</button></div>
     <div class="seg"><button id="btn-emergency">Emergency</button></div>
     <div class="seg"><button id="btn-assistant">Voice</button></div>
-    <span class="phase-badge" id="phase-badge">Hackathon build · Voice coming next</span>
+    <span class="phase-badge" id="phase-badge">Hackathon build · Voice agent</span>
   </div>
 </header>
 
@@ -452,12 +452,12 @@
         <span id="mic-label">Start voice session</span>
       </button>
     </div>
-    <p class="em-note" id="assistant-hint">Needs to be deployed (e.g. on Vercel) with ASSEMBLYAI_API_KEY set — this preview can't reach AssemblyAI's servers.</p>
+    <p class="em-note" id="assistant-hint">Click Start voice session, allow microphone access, then speak.</p>
   </div>
 </div>
 
 <footer>
-  <div class="note"><b>Simulation / Decision Support Prototype.</b> Digital twin, routing, emergency engine, what-if simulation, occupant guidance &amp; report export are live. Voice assistant is being wired up next.</div>
+  <div class="note"><b>Simulation / Decision Support Prototype.</b> Digital twin, routing, emergency engine, what-if simulation, occupant guidance &amp; report export are live. Voice assistant (AssemblyAI) is available in Security and Occupant modes.</div>
 </footer>
 
 <script>
@@ -1504,7 +1504,7 @@ function renderEmergencyPanel(){
     `;
     document.getElementById('emergency-clear').addEventListener('click', ()=>{ resetEmergency(); renderEmergencyPanel(); });
   } else {
-    badge.textContent = 'Hackathon build · Voice coming next';
+    badge.textContent = 'Hackathon build · Voice agent';
     badge.classList.remove('live');
     const fd = FLOORS[incidentDraft.floor-1];
     box.innerHTML = `
@@ -1746,6 +1746,7 @@ const VOICE_TOOL_SCHEMAS = [
     }, required:['exit_id'] },
   },
 ];
+const chatLog = document.getElementById('chat-log');
 function scrollChatToBottom(){ chatLog.scrollTop = chatLog.scrollHeight; }
 function appendChatMsg(role, text){
   const el = document.createElement('div');
