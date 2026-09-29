@@ -1852,7 +1852,8 @@ const voiceClient = {
           system_prompt: systemPromptFor(voiceMode),
           greeting: voiceMode==='security' ? "Security console ready. What's the situation?" : "Hi, I can help you find the nearest exit. Where are you?",
           tools: VOICE_TOOL_SCHEMAS,
-          voice:'ivy',
+          output: { voice:'ivy' },
+          input: { keyterms: ['EmergencyTwin','Central Mall','Room 305','West Exit','East Exit','North Exit','South Exit','Stairwell A','Stairwell B'] },
         },
       }));
     };
