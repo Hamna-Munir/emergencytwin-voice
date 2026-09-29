@@ -1710,6 +1710,7 @@ const VOICE_TOOLS = {
 
 const VOICE_TOOL_SCHEMAS = [
   {
+    type:'function',
     name:'find_route',
     description:'Computes the real shortest evacuation route from a starting room/exit id to a destination exit id (optional — omit for the nearest available exit) and highlights it in the 3D scene.',
     parameters:{ type:'object', properties:{
@@ -1718,6 +1719,7 @@ const VOICE_TOOL_SCHEMAS = [
     }, required:['start'] },
   },
   {
+    type:'function',
     name:'highlight',
     description:'Highlights one or more building objects (rooms, exits, stairs, elevator) by id in the 3D scene.',
     parameters:{ type:'object', properties:{
@@ -1725,11 +1727,13 @@ const VOICE_TOOL_SCHEMAS = [
     }, required:['ids'] },
   },
   {
+    type:'function',
     name:'get_building_status',
     description:'Returns the current live state of the digital twin: whether a fire incident is active, which floor, severity, hazard rooms, blocked exits/corridors, and elevator availability.',
     parameters:{ type:'object', properties:{} },
   },
   {
+    type:'function',
     name:'create_incident',
     description:'Starts a fire incident on the given floor. Use when Security says something like "start a fire on floor 2" or "there is a fire".',
     parameters:{ type:'object', properties:{
@@ -1739,6 +1743,7 @@ const VOICE_TOOL_SCHEMAS = [
     }, required:['floor'] },
   },
   {
+    type:'function',
     name:'block_exit',
     description:'Marks a specific emergency exit unavailable and recalculates affected routes. Use for commands like "block the west exit".',
     parameters:{ type:'object', properties:{
@@ -1847,7 +1852,7 @@ const voiceClient = {
           system_prompt: systemPromptFor(voiceMode),
           greeting: voiceMode==='security' ? "Security console ready. What's the situation?" : "Hi, I can help you find the nearest exit. Where are you?",
           tools: VOICE_TOOL_SCHEMAS,
-          output: { voice:'ivy' },
+          voice:'ivy',
         },
       }));
     };
