@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./banner.png" alt="EmergencyTwin AI — Dynamic 3D digital twin for emergency response and evacuation intelligence" width="100%">
+  <img src="./assets/banner.svg" alt="EmergencyTwin AI — Dynamic 3D digital twin for emergency response and evacuation intelligence" width="100%">
 </p>
 
 <h1 align="center">EmergencyTwin AI</h1>
