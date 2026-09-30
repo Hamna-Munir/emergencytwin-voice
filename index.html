@@ -230,6 +230,11 @@
     background:transparent; color:var(--text); font-weight:700; font-size:12.5px; cursor:pointer; font-family:inherit;
   }
   .ghost-btn:hover{ border-color:rgba(255,255,255,0.3); }
+  #event-list{ max-height:180px; overflow-y:auto; margin-top:4px; }
+  .event-row{ display:flex; gap:8px; padding:5px 0; border-top:1px solid var(--divider); font-size:11px; }
+  .event-row:first-child{ border-top:none; }
+  .event-row .ev-time{ color:var(--text-faint); flex:none; font-variant-numeric:tabular-nums; }
+  .event-row .ev-text{ color:var(--text-muted); }
   .incident-banner{
     padding:11px 12px; border-radius:10px; background:rgba(226,61,61,0.14);
     border:1px solid rgba(226,61,61,0.4); margin-bottom:4px;
@@ -380,6 +385,8 @@
     <div class="stat-row"><span class="k">Rooms</span><span class="v" id="stat-rooms">–</span></div>
     <div class="stat-row"><span class="k">Emergency exits</span><span class="v" id="stat-exits">–</span></div>
     <div class="stat-row"><span class="k">Semantic objects</span><span class="v" id="stat-objects">–</span></div>
+    <div class="stat-row" id="stat-occupants-row" style="display:none;"><span class="k">Occupants (simulated)</span><span class="v" id="stat-occupants">0</span></div>
+    <button class="ghost-btn" id="start-sim-btn" style="margin-top:11px;">Start evacuation simulation</button>
     <div class="divider-line"></div>
     <div class="layer-row" data-layer="rooms"><span class="swatch" style="background:linear-gradient(135deg,var(--room-retail),var(--room-office))"></span><span>Rooms (retail / office / storage)</span><div class="toggle on"></div></div>
     <div class="layer-row" data-layer="corridors"><span class="swatch" style="background:#8B99A8"></span><span>Corridors</span><div class="toggle on"></div></div>
@@ -388,6 +395,7 @@
     <div class="layer-row" data-layer="vertical"><span class="swatch" style="background:var(--stair)"></span><span>Stairs &amp; elevator</span><div class="toggle on"></div></div>
     <div class="layer-row" data-layer="exits"><span class="swatch" style="background:var(--exit)"></span><span>Emergency exits</span><div class="toggle on"></div></div>
     <div class="layer-row" data-layer="furniture"><span class="swatch" style="background:var(--furniture)"></span><span>Furniture</span><div class="toggle on"></div></div>
+    <div class="layer-row" data-layer="occupants"><span class="swatch" style="background:#FBBF24"></span><span>Occupants</span><div class="toggle on"></div></div>
   </div>
 </div>
 
@@ -1483,6 +1491,12 @@ document.getElementById('report-export-btn').addEventListener('click', ()=>{
    ============================================================ */
 let incidentDraft = { floor:1, severity:'High', hazardRooms:new Set(), blockedExits:new Set(), blockedCorridors:new Set() };
 
+function renderEventListHTML(){
+  if(!EVENTS.length) return '';
+  return `<div class="em-section-label" style="margin-top:16px;">Recent activity</div>
+    <div id="event-list">${EVENTS.map(e=>`<div class="event-row"><span class="ev-time">${e.time}</span><span class="ev-text">${e.text}</span></div>`).join('')}</div>`;
+}
+
 function renderEmergencyPanel(){
   const box = document.getElementById('emergency-body');
   const badge = document.getElementById('phase-badge');
@@ -1501,6 +1515,7 @@ function renderEmergencyPanel(){
       <div class="kv"><span class="k">Elevators</span><span class="v" style="color:#FF9B9B;">Unavailable</span></div>
       <p class="em-note">Elevators are automatically excluded from evacuation routing during any fire incident. Recalculate any open route to see the effect.</p>
       <button class="ghost-btn" id="emergency-clear">Clear incident</button>
+      ${renderEventListHTML()}
     `;
     document.getElementById('emergency-clear').addEventListener('click', ()=>{ resetEmergency(); renderEmergencyPanel(); });
   } else {
@@ -1524,6 +1539,7 @@ function renderEmergencyPanel(){
       ${fd.id===1 ? `<div class="em-section-label">Blocked exits</div><div class="chip-group" id="em-exits">${EXITS.map(ex=>`<span class="chip${incidentDraft.blockedExits.has(ex.id)?' active':''}" data-exit="${ex.id}">${ex.label}</span>`).join('')}</div>`
                    : `<p class="em-note">Exits are only on Floor 1 — block a corridor above to cut this floor's path down.</p>`}
       <button class="danger-btn" id="emergency-activate">Activate fire emergency</button>
+      ${renderEventListHTML()}
     `;
     document.getElementById('em-floor').addEventListener('change', (e)=>{
       incidentDraft = { floor: parseInt(e.target.value,10), severity: incidentDraft.severity, hazardRooms:new Set(), blockedExits:new Set(), blockedCorridors:new Set() };
@@ -1685,6 +1701,8 @@ function toolCreateIncident(floor, severity, hazardRoomIds){
   setFloorVisibility();
   focusFloor(f);
   setEmergencyPanelOpen(true);
+  recomputeAllEvacuatingRoutes();
+  pushEvent(`Fire incident started on Floor ${f} (${severity||'High'} severity).`);
   return { ok:true, message:`Fire incident created on Floor ${f} (${severity||'High'} severity).`, status:toolGetBuildingStatus() };
 }
 
@@ -1697,7 +1715,192 @@ function toolBlockExit(exitId){
   setExitHazard(exitId, 'blocked');
   renderEmergencyPanel();
   setEmergencyPanelOpen(true);
+  pushEvent(`Security blocked ${ex.label}.`);
+  recomputeAllEvacuatingRoutes();
   return { ok:true, message:`${ex.label} is now marked unavailable. Affected routes will be recalculated.`, status:toolGetBuildingStatus() };
+}
+
+/* ============================================================
+   EVENT LOG — feeds the Emergency panel's "Recent activity" list
+   ============================================================ */
+const EVENTS = [];
+function pushEvent(text){
+  EVENTS.unshift({ time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}), text });
+  if(EVENTS.length > 20) EVENTS.length = 20;
+  if(typeof renderEmergencyPanel === 'function') renderEmergencyPanel();
+}
+
+/* ============================================================
+   SIMULATED OCCUPANTS
+   ============================================================ */
+const OCCUPANT_COUNTS = { 1:12, 2:16, 3:10 }; // kept demo-sized (not literally 30/45/25) so the 3D scene stays legible
+const OCCUPANTS = [];
+const occupantMeshMat = {
+  normal: new THREE.MeshStandardMaterial({ color:0xE7ECF2, emissive:0x2a2e33, emissiveIntensity:0.4 }),
+  mobility_assisted: new THREE.MeshStandardMaterial({ color:0x38BDF8, emissive:0x0c3c4d, emissiveIntensity:0.5 }),
+  assistance_required: new THREE.MeshStandardMaterial({ color:0xFBBF24, emissive:0x4a3a08, emissiveIntensity:0.6 }),
+};
+const occupantsGroup = new THREE.Group();
+scene.add(occupantsGroup);
+layerGroups.occupants = occupantsGroup;
+
+function pickMobility(i){
+  if(i % 20 === 0) return 'assistance_required';
+  if(i % 12 === 0) return 'mobility_assisted';
+  return 'normal';
+}
+
+function generateOccupants(){
+  if(OCCUPANTS.length) return;
+  let seq = 1;
+  FLOORS.forEach(fd=>{
+    const count = OCCUPANT_COUNTS[fd.id] || 10;
+    const usableRooms = fd.rooms.filter(r=>r.subtype!=='utility');
+    for(let i=0;i<count;i++){
+      const room = usableRooms[Math.floor(Math.random()*usableRooms.length)] || fd.rooms[0];
+      const mobility = pickMobility(seq);
+      const jitterX = (Math.random()-0.5)*Math.min(room.w*0.6, 3);
+      const jitterZ = (Math.random()-0.5)*Math.min(room.d*0.6, 3);
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 10), occupantMeshMat[mobility]);
+      mesh.position.set(room.x+jitterX, fd.elevation+0.5, room.z+jitterZ);
+      mesh.castShadow = true;
+      occupantsGroup.add(mesh);
+      OCCUPANTS.push({
+        id:'P'+String(seq++).padStart(3,'0'), floor:fd.id, roomId:room.id, groupId:'G'+fd.id,
+        mobility, status:'idle', speed: mobility==='mobility_assisted' ? 1.0 : 1.9,
+        path:null, pathPoints:null, segIndex:0, segProgress:0, mesh,
+      });
+    }
+  });
+}
+
+function computeOccupantRoute(o, fromNodeId){
+  const startId = fromNodeId || o.roomId;
+  if(!GRAPH.nodes[startId]){ o.status='blocked'; return; }
+  let best = null;
+  EXITS.forEach(ex=>{
+    const r = GRAPH.dijkstra(startId, ex.id);
+    if(r && r.status!=='blocked' && (!best || r.distance<best.distance)) best = r;
+  });
+  if(!best){
+    // fall back to any path even if flagged restricted/blocked, so the dot at least shows "stuck"
+    EXITS.forEach(ex=>{ const r = GRAPH.dijkstra(startId, ex.id); if(r && (!best || r.distance<best.distance)) best=r; });
+  }
+  if(!best){ o.status='blocked'; return; }
+  o.path = best.path;
+  o.pathPoints = best.path.map(nodeWorldPos);
+  o.segIndex = 0; o.segProgress = 0;
+  o.status = best.status==='blocked' ? 'blocked' : 'evacuating';
+}
+
+function recomputeAllEvacuatingRoutes(){
+  OCCUPANTS.forEach(o=>{
+    if(o.status==='evacuating' || o.status==='blocked'){
+      const currentNode = o.path ? o.path[o.segIndex] : o.roomId;
+      computeOccupantRoute(o, currentNode);
+    }
+  });
+}
+
+function updateOccupants(dt){
+  OCCUPANTS.forEach(o=>{
+    if(o.status!=='evacuating'){ return; }
+    if(!o.pathPoints || o.pathPoints.length<2){ o.status='arrived'; return; }
+    let remaining = o.speed*dt;
+    while(remaining>0 && o.segIndex < o.pathPoints.length-1){
+      const a=o.pathPoints[o.segIndex], b=o.pathPoints[o.segIndex+1];
+      const segLen = Math.max(a.distanceTo(b), 0.0001);
+      const segRemaining = segLen*(1-o.segProgress);
+      if(remaining < segRemaining){ o.segProgress += remaining/segLen; remaining = 0; }
+      else { remaining -= segRemaining; o.segIndex++; o.segProgress = 0; }
+    }
+    if(o.segIndex >= o.pathPoints.length-1){
+      o.status='arrived';
+      o.mesh.visible=false;
+      return;
+    }
+    const a=o.pathPoints[o.segIndex], b=o.pathPoints[o.segIndex+1];
+    o.mesh.position.lerpVectors(a, b, o.segProgress);
+    const curFloor = (GRAPH.nodes[o.path[o.segIndex]] || {}).floor;
+    o.mesh.visible = (currentFloor==='all') || (curFloor!==undefined && String(curFloor)===String(currentFloor));
+  });
+}
+
+function toolStartSimulation(){
+  generateOccupants();
+  let started=0;
+  OCCUPANTS.forEach(o=>{ if(o.status==='idle'){ computeOccupantRoute(o); o.mesh.visible = (currentFloor==='all')||String(o.floor)===String(currentFloor); started++; } });
+  pushEvent(`Evacuation simulation started — ${OCCUPANTS.length} occupants now evacuating.`);
+  updateOverviewOccupantStat();
+  return { ok:true, message:`Started evacuation simulation with ${OCCUPANTS.length} simulated occupants across 3 floors.`, ...toolGetCrowdState() };
+}
+
+function toolGetCrowdState(){
+  const perFloor = {};
+  FLOORS.forEach(fd=> perFloor[fd.id] = { total:0, evacuating:0, arrived:0, blocked:0 });
+  OCCUPANTS.forEach(o=>{
+    perFloor[o.floor].total++;
+    if(o.status==='evacuating') perFloor[o.floor].evacuating++;
+    else if(o.status==='arrived') perFloor[o.floor].arrived++;
+    else if(o.status==='blocked') perFloor[o.floor].blocked++;
+  });
+  return { totalOccupants: OCCUPANTS.length, perFloor };
+}
+
+function updateOverviewOccupantStat(){
+  const el = document.getElementById('stat-occupants-row');
+  if(!el) return;
+  const s = toolGetCrowdState();
+  el.style.display = s.totalOccupants ? 'flex' : 'none';
+  document.getElementById('stat-occupants').textContent = s.totalOccupants;
+  const btn = document.getElementById('start-sim-btn');
+  if(btn && s.totalOccupants){
+    btn.textContent = 'Simulation running…';
+    btn.disabled = true;
+    btn.style.opacity = '0.55';
+    btn.style.cursor = 'default';
+  }
+}
+
+document.getElementById('start-sim-btn').addEventListener('click', ()=> toolStartSimulation());
+
+function matchTextToBuildingLocation(text){
+  const t = (text||'').toLowerCase();
+  let bestRoom = null;
+  FLOORS.forEach(fd=> fd.rooms.forEach(r=>{
+    const label = r.label.toLowerCase();
+    if(t.includes(label) || label.includes(t)) bestRoom = bestRoom || { type:'room', id:r.id, floor:fd.id, label:r.label };
+  }));
+  if(bestRoom) return bestRoom;
+  if(t.includes('branch') || (t.includes('north') && t.includes('corridor'))) return { type:'corridor', key:'branch', label:'North Corridor Branch' };
+  if(t.includes('corridor')) return { type:'corridor', key:'main', label:'Central Corridor' };
+  return null;
+}
+
+function toolAddHazardRoom(roomId, floor){
+  ensureIncidentContext(floor||EMERGENCY.floor||1, EMERGENCY.severity||'Medium');
+  EMERGENCY.hazardRooms.add(roomId);
+  blockAllEdgesTouching(roomId, 'blocked');
+  setRoomHazard(roomId, 'blocked');
+}
+
+function toolReportOccupantHazard(location, description){
+  const match = matchTextToBuildingLocation(location);
+  if(!match) return { error:`Could not match "${location}" to a known part of the building.` };
+  const floor = match.floor || EMERGENCY.floor || 1;
+  if(match.type==='room'){
+    toolAddHazardRoom(match.id, floor);
+  } else {
+    ensureIncidentContext(floor, EMERGENCY.severity||'Medium');
+    setCorridorGraphStatus(match.key, floor, 'blocked');
+    setCorridorHazard(`corridor_${match.key}_f${floor}`, 'blocked');
+    EMERGENCY.blockedCorridors.add(`${match.key}_f${floor}`);
+  }
+  renderEmergencyPanel();
+  setEmergencyPanelOpen(true);
+  recomputeAllEvacuatingRoutes();
+  pushEvent(`Occupant report: "${description||'hazard'}" near ${match.label} — marked unsafe, routes recalculated.`);
+  return { ok:true, message:`Understood — I've marked ${match.label} as unsafe and recalculated affected routes.`, status:toolGetBuildingStatus() };
 }
 
 const VOICE_TOOLS = {
@@ -1706,10 +1909,14 @@ const VOICE_TOOLS = {
   get_building_status: ()=> toolGetBuildingStatus(),
   create_incident: (args)=> toolCreateIncident(args.floor, args.severity, args.hazard_room_ids),
   block_exit: (args)=> toolBlockExit(args.exit_id),
+  start_simulation: ()=> toolStartSimulation(),
+  get_crowd_state: ()=> toolGetCrowdState(),
+  report_occupant_hazard: (args)=> toolReportOccupantHazard(args.location, args.description),
 };
 
 const VOICE_TOOL_SCHEMAS = [
   {
+
     type:'function',
     name:'find_route',
     description:'Computes the real shortest evacuation route from a starting room/exit id to a destination exit id (optional — omit for the nearest available exit) and highlights it in the 3D scene.',
@@ -1750,6 +1957,27 @@ const VOICE_TOOL_SCHEMAS = [
       exit_id:{ type:'string', description:'Exit id: exit_west, exit_north, exit_south, or exit_east.' },
     }, required:['exit_id'] },
   },
+  {
+    type:'function',
+    name:'start_simulation',
+    description:'Starts an evacuation drill: generates simulated occupants across all 3 floors and starts them moving toward their nearest available exit. Use for commands like "start an evacuation simulation".',
+    parameters:{ type:'object', properties:{} },
+  },
+  {
+    type:'function',
+    name:'get_crowd_state',
+    description:'Returns how many simulated occupants are on each floor and how many are currently evacuating, arrived, or blocked.',
+    parameters:{ type:'object', properties:{} },
+  },
+  {
+    type:'function',
+    name:'report_occupant_hazard',
+    description:'Records a hazard an occupant is reporting (e.g. smoke, blockage) at a described location, marks that room or corridor unsafe, and recalculates affected evacuation routes. Use this whenever the person describes a new danger they are seeing, not just asking for directions.',
+    parameters:{ type:'object', properties:{
+      location:{ type:'string', description:'Where the hazard is, in their own words, e.g. "the food court" or "the north corridor".' },
+      description:{ type:'string', description:'What they reported, e.g. "smoke" or "the corridor is blocked".' },
+    }, required:['location','description'] },
+  },
 ];
 const chatLog = document.getElementById('chat-log');
 function scrollChatToBottom(){ chatLog.scrollTop = chatLog.scrollHeight; }
@@ -1781,14 +2009,14 @@ modeOccupantBtn.addEventListener('click', ()=>{
 function getBuildingContext(){
   const roomList = FLOORS.flatMap(fd=>fd.rooms.map(r=>`${r.id} | ${r.label} | Floor ${fd.id} | ${r.subtype}`)).join('\n');
   const exitList = EXITS.map(ex=>`${ex.id} | ${ex.label} | Floor 1`).join('\n');
-  return `BUILDING: Central Mall, 3 floors.\nRooms (id | label | floor | type):\n${roomList}\nEmergency exits (id | label | floor):\n${exitList}\nStairwells: stairA, stairB. Elevator: elevatorA (all automatically unavailable during any active fire incident).`;
+  return `BUILDING: Central Mall, 3 floors.\nRooms (id | label | floor | type):\n${roomList}\nEmergency exits (id | label | floor):\n${exitList}\nCorridors on every floor: "Central Corridor" and "North Corridor Branch" — these are the only corridor names that exist, never invent another corridor name.\nStairwells: Stairwell A, Stairwell B. Elevator: Elevator A (automatically unavailable during any active fire incident).`;
 }
 function systemPromptFor(mode){
   const base = `You are the voice assistant for EmergencyTwin AI, a live 3D digital twin of a building used for emergency-response decision support. Never invent rooms, exits, distances or routes — only use the building data below and your tools. If something isn't in the digital twin, say so. Keep spoken replies short (1-2 sentences) — this is a voice conversation, not a chat.\n\n${getBuildingContext()}`;
   if(mode==='security'){
-    return base + `\n\nMODE: SECURITY / EMERGENCY OPERATOR. The person is trained security staff. They may ask what's happening on a floor, which exits are available, ask you to start a fire incident, block a specific exit, or ask for a route to check. Use create_incident, block_exit, get_building_status, find_route and highlight as needed. Confirm out loud what you changed after acting.`;
+    return base + `\n\nMODE: SECURITY / EMERGENCY OPERATOR. The person is trained security staff. They may ask what's happening on a floor, which exits are available, ask you to start an evacuation simulation, start a fire incident, block a specific exit, check crowd/occupant counts, or ask for a route to check. Use create_incident, block_exit, start_simulation, get_crowd_state, get_building_status, find_route and highlight as needed. Confirm out loud what you changed after acting.`;
   }
-  return base + `\n\nMODE: BUILDING OCCUPANT. The person is inside the building and may be anxious. They will describe where they are (e.g. "I'm near the food court on floor 1" — match that to the closest room id). Call find_route with their location as the start and no destination (nearest exit). Give calm, brief spoken directions based only on the tool result. Never guess a route yourself.`;
+  return base + `\n\nMODE: BUILDING OCCUPANT. The person is inside the building and may be anxious. They will describe where they are (e.g. "I'm near the food court on floor 1" — match that to the closest room id). Call find_route with their location as the start and no destination (nearest exit). Give calm, brief spoken directions based only on the tool result. Never guess a route yourself. If they describe a new danger (smoke, blockage, fire) rather than just asking for directions, call report_occupant_hazard with the location and what they described, then tell them the alternate route.`;
 }
 
 const voiceClient = {
@@ -2024,8 +2252,12 @@ function updateLabels(){
   }
 }
 
+let __lastFrameTime = performance.now();
 function animate(){
   requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = Math.min((now - __lastFrameTime)/1000, 0.1);
+  __lastFrameTime = now;
   controls.update();
   if(selectedOutline) selectedOutline.update();
   if(aiOutlines.length) aiOutlines.forEach(o=>o.update());
@@ -2034,6 +2266,7 @@ function animate(){
     if(routeFlowT>1) routeFlowT=0;
     routeFlowMarker.position.copy(routeCurve.getPointAt(routeFlowT));
   }
+  updateOccupants(dt);
   renderer.render(scene, camera);
   updateLabels();
 }
